@@ -48,3 +48,22 @@ class SubLoginResp(BaseModel):
     account_type: str
     roles: List[str]
     default_workspace_id: str
+
+
+class QueryUserInfoReq(BaseModel):
+    """国家中试基地数智中台 2.4.3 用户信息查询入参"""
+    USER_ID: Optional[str] = Field(None, description="基地入驻用户/机构全局唯一业务编号")
+    user_id: Optional[str] = Field(None, description="用户ID")
+    portal_user_id: Optional[str] = Field(None, description="门户系统用户ID")
+    QUERY_TYPE: Optional[str] = Field("DETAIL", description="查询类型")
+
+
+class QueryUserInfoResp(BaseModel):
+    """国家中试基地数智中台 2.4.3 用户信息查询出参"""
+    BIZ_CODE: str = Field("0000", description="业务应答码")
+    BIZ_MSG: str = Field("查询成功", description="业务描述")
+    USER_ID: str = Field(..., description="基地用户全局唯一标识")
+    USER_NAME: str = Field(..., description="用户/机构名称")
+    PROVINCE_CODE: str = Field("32", description="归属省份代码 (江苏32)")
+    EPARCHY_CODE: str = Field("3205", description="归属地市代码 (苏州3205)")
+    STATUS: str = Field("ACTIVE", description="用户状态")

@@ -9,3 +9,5 @@ __pycache__
 *.tar
 *.tar.gz
 *.log
+upload/
+app/upload/

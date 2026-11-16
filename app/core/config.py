@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     GATEWAY_HMAC_SECRET: str = "shuzidizuo_gw_secret_2026"
     INTERNAL_JWT_SECRET: str = "shuzidizuo_iam_jwt_secret_2026"
 
+    # 国家中试基地统一接口规范鉴权凭证
+    PILOT_APP_ID: str = "APP_SZ_PILOT_001"
+    PILOT_APP_SECRET: str = "B2732427"
+    PILOT_VERIFY_TOKEN: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

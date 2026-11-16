@@ -166,3 +166,38 @@ def verify_internal_jwt(token: str) -> Optional[Dict[str, Any]]:
         return payload
     except Exception:
         return None
+
+
+def generate_pilot_token(app_id: str, timestamp: str, trans_id: str, app_secret: str) -> str:
+    """
+    国家中试基地数智中台统一接口规范 2.2.2 & 2.2.4 TOKEN 算法:
+    1. 参数按照字母先后顺序升序排序 (ASCII字典升序): APP_ID, TIMESTAMP, TRANS_ID
+    2. 依次拼接 key + value
+    3. 末尾拼接 app_secret
+    4. MD5 32位小写计算
+    """
+    params = {
+        "APP_ID": app_id,
+        "TIMESTAMP": timestamp,
+        "TRANS_ID": trans_id,
+    }
+    sorted_keys = sorted(params.keys())
+    raw_str = "".join(f"{k}{params[k]}" for k in sorted_keys)
+    raw_str += app_secret
+    return hashlib.md5(raw_str.encode("utf-8")).hexdigest().lower()
+
+
+def verify_pilot_token(
+    app_id: str,
+    timestamp: str,
+    trans_id: str,
+    token: str,
+    app_secret: Optional[str] = None,
+) -> bool:
+    """
+    验证国家中试基地数智中台 TOKEN
+    """
+    secret = app_secret or getattr(settings, "PILOT_APP_SECRET", "B2732427")
+    expected = generate_pilot_token(app_id, timestamp, trans_id, secret)
+    return hmac.compare_digest(expected.lower(), token.lower())
+

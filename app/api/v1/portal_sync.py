@@ -21,6 +21,8 @@ from app.schemas.portal_sync import (
     EnterpriseApprovedResp,
     SubLoginReq,
     SubLoginResp,
+    QueryUserInfoReq,
+    QueryUserInfoResp,
 )
 
 logger = logging.getLogger("iam-service.portal_sync")
@@ -373,3 +375,144 @@ def sub_login(req: SubLoginReq, db: Session = Depends(get_db)):
             default_workspace_id=default_ws_id,
         )
     )
+
+
+@router.post(
+    "/customer/cuseser/v1",
+    response_model=ResponseModel[QueryUserInfoResp],
+    summary="用户信息查询接口 (国家中试基地标准规范 2.4.3)",
+)
+@router.post(
+    "/user/queryUserInfo",
+    response_model=ResponseModel[QueryUserInfoResp],
+    summary="用户信息查询接口 (国家中试基地标准规范 2.4.3)",
+)
+@router.get(
+    "/user/queryUserInfo",
+    response_model=ResponseModel[QueryUserInfoResp],
+    summary="用户信息查询接口 (GET 支持)",
+)
+def query_user_info(
+    req: Optional[QueryUserInfoReq] = None,
+    user_id: Optional[str] = Query(None),
+    portal_user_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    符合《国家工业中试基地与数智中台 统一接口规范》2.4.3 具象业务调用样例:
+    入参支持 USER_ID / user_id / portal_user_id，返回标准 _QUERY_USER_INFO_RSP 结构。
+    """
+    target_uid = ""
+    if req:
+        target_uid = req.USER_ID or req.user_id or req.portal_user_id or ""
+    if not target_uid:
+        target_uid = user_id or portal_user_id or ""
+
+    if not target_uid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少用户标识参数 (USER_ID 或 user_id)",
+        )
+
+    profile = (
+        db.query(UcUserProfile)
+        .filter(
+            (UcUserProfile.user_id == target_uid)
+            | (UcUserProfile.portal_user_id == target_uid)
+            | (UcUserProfile.casdoor_user_id == target_uid),
+            UcUserProfile.is_deleted == 0,
+        )
+        .first()
+    )
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"未找到用户标识为 '{target_uid}' 的用户信息",
+        )
+
+    tenant = db.query(UcTenant).filter_by(tenant_id=profile.tenant_id).first()
+    user_name = (tenant.tenant_name if tenant else None) or profile.casdoor_user_id
+
+    resp = QueryUserInfoResp(
+        BIZ_CODE="0000",
+        BIZ_MSG="查询成功",
+        USER_ID=profile.user_id,
+        USER_NAME=user_name,
+        PROVINCE_CODE="32",
+        EPARCHY_CODE="3205",
+        STATUS="ACTIVE" if profile.status == 1 else "INACTIVE",
+    )
+    return ResponseModel(data=resp, api_name="queryUserInfo")
+
+
+@router.post(
+    "/sync/export-data-middle-platform",
+    response_model=ResponseModel[Dict[str, Any]],
+    summary="数据中台对接日文件导出 (国家中试基地规范第3章)",
+)
+def export_data_middle_platform(
+    target_dir: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    国家工业中试基地与数智中台 统一接口规范 3.2 数据上传明细接口:
+    - 3.2.1 用户信息-日文件 (USER_INFO_{YYYYMMDD}.000): USER_ID|USER_NAME|PROVINCE_CODE|EPARCHY_CODE
+    - 3.2.2 用户属性信息-日文件 (USER_ATTR_{YYYYMMDD}.000): USER_ID|ATTR_TYPE|ATTR_NAME|ATTR_VALUE
+    - 3.6.3 原子性保障: 写入 .tmp 临时文件后，通过原子重命名完成。
+    """
+    import os
+    from datetime import datetime
+
+    date_str = datetime.now().strftime("%Y%m%d")
+    out_dir = target_dir or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "upload", "user")
+    os.makedirs(out_dir, exist_ok=True)
+
+    user_info_file = os.path.join(out_dir, f"USER_INFO_{date_str}.000")
+    user_info_tmp = f"{user_info_file}.tmp"
+    user_attr_file = os.path.join(out_dir, f"USER_ATTR_{date_str}.000")
+    user_attr_tmp = f"{user_attr_file}.tmp"
+
+    profiles = db.query(UcUserProfile).filter_by(is_deleted=0).all()
+    user_lines = []
+    attr_lines = []
+
+    for p in profiles:
+        tenant = db.query(UcTenant).filter_by(tenant_id=p.tenant_id).first()
+        org_name = (tenant.tenant_name if tenant else None) or p.casdoor_user_id
+        # 3.2.1 USER_ID|USER_NAME|PROVINCE_CODE|EPARCHY_CODE
+        user_lines.append(f"{p.user_id}|{org_name}|32|3205\n")
+
+        # 3.2.2 USER_ID|ATTR_TYPE|ATTR_NAME|ATTR_VALUE
+        attr_lines.append(f"{p.user_id}|1|ACCOUNT_TYPE|{p.account_type}\n")
+        if tenant:
+            attr_lines.append(f"{p.user_id}|2|TENANT_TYPE|{tenant.tenant_type}\n")
+            attr_lines.append(f"{p.user_id}|4|QUALIFICATION_LEVEL|LEVEL_{tenant.cert_level}\n")
+            if tenant.credit_code:
+                attr_lines.append(f"{p.user_id}|2|CREDIT_CODE|{tenant.credit_code}\n")
+
+    # 3.6.3 原子写入 USER_INFO
+    with open(user_info_tmp, "w", encoding="utf-8") as f:
+        f.writelines(user_lines)
+    if os.path.exists(user_info_file):
+        os.remove(user_info_file)
+    os.rename(user_info_tmp, user_info_file)
+
+    # 3.6.3 原子写入 USER_ATTR
+    with open(user_attr_tmp, "w", encoding="utf-8") as f:
+        f.writelines(attr_lines)
+    if os.path.exists(user_attr_file):
+        os.remove(user_attr_file)
+    os.rename(user_attr_tmp, user_attr_file)
+
+    result_data = {
+        "status": "SUCCESS",
+        "date_str": date_str,
+        "user_info_file": os.path.basename(user_info_file),
+        "user_info_count": len(user_lines),
+        "user_attr_file": os.path.basename(user_attr_file),
+        "user_attr_count": len(attr_lines),
+        "export_directory": out_dir,
+    }
+    return ResponseModel(data=result_data, api_name="exportDataMiddlePlatform")
+
