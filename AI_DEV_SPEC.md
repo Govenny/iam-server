@@ -219,10 +219,16 @@ set -e
 
 IMAGE_NAME="iam-service"
 IMAGE_TAG="latest"
+PLATFORM="${TARGET_PLATFORM:-${1:-linux/arm64}}"
 OUTPUT_FILE="${IMAGE_NAME}.tar.gz"
 
-echo ">>> [1/3] 构建 Python 3.12 镜像: ${IMAGE_NAME}:${IMAGE_TAG} ..."
-docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+echo ">>> [1/3] 构建 Python 3.12 镜像 (默认架构: ${PLATFORM}): ${IMAGE_NAME}:${IMAGE_TAG} ..."
+if docker buildx version >/dev/null 2>&1; then
+    docker buildx build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" --load . || \
+    docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+else
+    docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+fi
 
 echo ">>> [2/3] 导出并压缩镜像至 ${OUTPUT_FILE} ..."
 docker save ${IMAGE_NAME}:${IMAGE_TAG} | gzip >${OUTPUT_FILE}
