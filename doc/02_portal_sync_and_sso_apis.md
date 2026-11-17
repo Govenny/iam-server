@@ -72,7 +72,7 @@ sequenceDiagram
 | `is_enterprise` | `boolean` | 否 | `false` | `false` | 是否注册即为企业用户（若为 true 初始化为企业租户） |
 | `company_name` | `string` | 否 | `""` | `"苏州数智科技有限公司"` | 企业名称（若为企业用户必填） |
 
-#### 请求报文示例（双模兼容）
+#### 请求报文示例（双模兼容）`
 
 **1. 中台统一报文模式**：
 ```json
