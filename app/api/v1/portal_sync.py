@@ -381,16 +381,19 @@ def sub_login(req: SubLoginReq, db: Session = Depends(get_db)):
     "/customer/cuseser/v1",
     response_model=ResponseModel[QueryUserInfoResp],
     summary="用户信息查询接口 (国家中试基地标准规范 2.4.3)",
+    operation_id="query_user_info_v1_cuseser_post",
 )
 @router.post(
     "/user/queryUserInfo",
     response_model=ResponseModel[QueryUserInfoResp],
     summary="用户信息查询接口 (国家中试基地标准规范 2.4.3)",
+    operation_id="query_user_info_post",
 )
 @router.get(
     "/user/queryUserInfo",
     response_model=ResponseModel[QueryUserInfoResp],
     summary="用户信息查询接口 (GET 支持)",
+    operation_id="query_user_info_get",
 )
 def query_user_info(
     req: Optional[QueryUserInfoReq] = None,

@@ -220,9 +220,29 @@ app.include_router(api_v1_router)
 app.add_api_route(
     "/api/customer/cuseser/v1",
     query_user_info,
-    methods=["POST", "GET"],
+    methods=["POST"],
     tags=["国家中试基地数智中台能力开放"],
-    summary="数智中台标准接口 2.2.3 用户信息查询",
+    summary="数智中台标准接口 2.2.3 用户信息查询 (POST)",
+    operation_id="query_user_info_standard_cuseser_post",
+)
+app.add_api_route(
+    "/api/customer/cuseser/v1",
+    query_user_info,
+    methods=["GET"],
+    tags=["国家中试基地数智中台能力开放"],
+    summary="数智中台标准接口 2.2.3 用户信息查询 (GET)",
+    operation_id="query_user_info_standard_cuseser_get",
+)
+
+# 挂载网关内部直接调用路由 /internal/v1/*
+from app.api.v1.shadow_grant import resolve_shadow_route
+app.add_api_route(
+    "/internal/v1/uc/shadow-route/resolve",
+    resolve_shadow_route,
+    methods=["GET"],
+    tags=["契约回调与影子路由"],
+    summary="查询或JIT创建影子账号 (内部网关调用)",
+    operation_id="resolve_shadow_route_internal",
 )
 
 
