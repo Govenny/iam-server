@@ -28,6 +28,22 @@ class SubAccountCreateResp(BaseModel):
     allowed_modules: List[str]
 
 
+class WorkspaceBindingItem(BaseModel):
+    workspace_id: str = Field(..., description="工作空间ID")
+    role_code: str = Field(..., description="该空间下的标准角色编码")
+    allowed_modules: List[str] = Field(default_factory=list, description="该空间下的准入模块白名单")
+
+
+class SubAccountUpdateReq(BaseModel):
+    workspace_ids: List[str] = Field(default_factory=list, description="授权的工作空间ID列表")
+    role_code: str = Field(..., description="租户标准角色编码，如 TENANT_DEVELOPER")
+    allowed_modules: List[str] = Field(default_factory=list, description="授权的模块白名单列表")
+    status: Optional[int] = Field(None, description="账号状态: 1-正常, 2-冻结")
+    workspace_bindings: Optional[List[WorkspaceBindingItem]] = Field(
+        None, description="可选：按工作空间精细化指定角色与模块（传入时优先使用）"
+    )
+
+
 class SubAccountItemResp(BaseModel):
     user_id: str
     username: str
@@ -41,3 +57,4 @@ class SubAccountItemResp(BaseModel):
     workspaces: List[str]
     roles: List[str]
     allowed_modules: List[str]
+    workspace_bindings: List[WorkspaceBindingItem] = Field(default_factory=list)

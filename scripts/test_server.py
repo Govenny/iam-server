@@ -68,12 +68,13 @@ def main():
 
     # 2. 门户同步个人用户
     log_step(2, "模拟门户注册/登录静默双写同步 (POST /api/v1/sync/user)")
-    portal_uid = f"p_{int(time.time())}"
+    ts = int(time.time())
+    portal_uid = f"p_{ts}"
     sync_req = {
         "portal_user_id": portal_uid,
         "username": f"user_{portal_uid}",
         "display_name": f"测试企业主_{portal_uid[-4:]}",
-        "phone": "13800138000",
+        "phone": f"138{ts % 100000000:08d}",
         "is_platform_admin": False,
         "is_enterprise": False,
         "company_name": "",
@@ -113,7 +114,7 @@ def main():
         "username": sub_uname,
         "password": "Password123!@#",
         "display_name": "李工(模型专家)",
-        "phone": "13900001111",
+        "phone": f"139{ts % 100000000:08d}",
         "parent_user_id": master_uid,
         "workspace_ids": [default_ws],
         "role_code": "TENANT_DEVELOPER",

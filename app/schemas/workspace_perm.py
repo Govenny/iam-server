@@ -22,6 +22,23 @@ class WorkspaceResp(BaseModel):
     caict_workspace_id: str
     quota_config_json: Dict[str, Any]
     status: int
+    member_count: int = 0
+
+
+class WorkspaceMemberResp(BaseModel):
+    user_id: str
+    username: str
+    display_name: str
+    account_type: str
+    status: int
+    role_code: str
+    allowed_modules: List[str] = Field(default_factory=list)
+
+
+class WorkspaceMemberAssignReq(BaseModel):
+    user_id: str = Field(..., description="目标用户ID")
+    role_code: str = Field(..., description="工作空间角色编码")
+    allowed_modules: List[str] = Field(default_factory=list, description="准入模块白名单")
 
 
 class ModulesAndRolesResp(BaseModel):

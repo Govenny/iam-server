@@ -38,8 +38,10 @@ class CasdoorClientWrapper:
         user = User()
         user.owner = org
         user.name = username
+        user.type = "normal-user"
         user.displayName = display_name or username
         user.phone = phone or ""
+        user.countryCode = "CN"
         user.email = email or ""
         user.password = password or ""
         user.signupApplication = settings.CASDOOR_APP_NAME

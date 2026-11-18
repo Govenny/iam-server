@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.casdoor_client import casdoor_client
+from app.core.redis_client import get_redis_client
 from app.api.deps import AuthContext, get_current_context
 from app.models.tenant import UcTenant
 from app.models.user_profile import UcUserProfile
@@ -15,12 +16,40 @@ from app.schemas.common import ResponseModel
 from app.schemas.sub_account import (
     SubAccountCreateReq,
     SubAccountCreateResp,
+    SubAccountUpdateReq,
     SubAccountItemResp,
+    WorkspaceBindingItem,
 )
 
 logger = logging.getLogger("iam-service.sub_account")
 
 router = APIRouter(prefix="/uc", tags=["企业主子账号树"])
+
+VALID_SUB_ROLES = {
+    "TENANT_ADMIN",
+    "TENANT_DEVELOPER",
+    "TENANT_FINANCE",
+    "TENANT_VIEWER",
+}
+KNOWN_PLATFORMS = ("MODEL_ENGINE", "COMPUTE", "AGENT", "CAICT_DATA_ENG")
+
+
+def _is_tenant_manager(ctx: AuthContext) -> bool:
+    return ctx.account_type == "MASTER" or ctx.role_code in ["TENANT_ADMIN", "PLATFORM_ADMIN"]
+
+
+def _invalidate_user_perm_cache(tenant_id: str, user_id: str, workspace_ids: List[str]) -> None:
+    try:
+        r = get_redis_client()
+        keys = [
+            f"perm:user:{tenant_id}:{user_id}:{ws_id}:{plat}"
+            for ws_id in set(workspace_ids)
+            for plat in KNOWN_PLATFORMS
+        ]
+        if keys and hasattr(r, "delete"):
+            r.delete(*keys)
+    except Exception as e:
+        logger.warning(f"Failed to invalidate permission cache for user {user_id}: {e}")
 
 
 @router.post(
@@ -51,10 +80,10 @@ def create_sub_account(
             detail="当前租户为个人租户或未完成企业认证，无法创建企业子账号。请先完成企业实名认证",
         )
 
-    if ctx.role_code not in ["TENANT_ADMIN", "PLATFORM_ADMIN"]:
+    if not _is_tenant_manager(ctx):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有企业管理员（TENANT_ADMIN）有权创建子账号",
+            detail="只有主账号或企业管理员（TENANT_ADMIN）有权创建子账号",
         )
 
     # 2. 检查用户名唯一性
@@ -201,9 +230,17 @@ def get_sub_account_tree(
             .filter_by(user_id=p.user_id, tenant_id=ctx.tenant_id)
             .all()
         )
-        ws_ids = list({b.workspace_id for b in bindings})
-        roles = list({b.role_code for b in bindings})
-        modules = list({m for b in bindings for m in (b.allowed_modules or [])})
+        ws_ids = list(dict.fromkeys(b.workspace_id for b in bindings))
+        roles = list(dict.fromkeys(b.role_code for b in bindings))
+        modules = list(dict.fromkeys(m for b in bindings for m in (b.allowed_modules or [])))
+        ws_bindings = [
+            WorkspaceBindingItem(
+                workspace_id=b.workspace_id,
+                role_code=b.role_code,
+                allowed_modules=b.allowed_modules or [],
+            )
+            for b in bindings
+        ]
 
         items.append(
             SubAccountItemResp(
@@ -219,7 +256,167 @@ def get_sub_account_tree(
                 workspaces=ws_ids,
                 roles=roles,
                 allowed_modules=modules,
+                workspace_bindings=ws_bindings,
             )
         )
 
     return ResponseModel(data=items)
+
+
+@router.put(
+    "/sub-account/{user_id}/permissions",
+    response_model=ResponseModel[SubAccountItemResp],
+    summary="主账号/企业管理员编辑子账号的角色、模块权限与工作空间",
+)
+def update_sub_account_permissions(
+    user_id: str,
+    req: SubAccountUpdateReq,
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+):
+    """
+    由企业主账号或企业管理员编辑指定子账号的授权工作空间、标准角色、模块准入白名单及账号状态。
+    """
+    if not _is_tenant_manager(ctx):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有主账号或企业管理员有权编辑子账号权限",
+        )
+
+    profile = (
+        db.query(UcUserProfile)
+        .filter(
+            UcUserProfile.user_id == user_id,
+            UcUserProfile.tenant_id == ctx.tenant_id,
+            UcUserProfile.is_deleted == 0,
+        )
+        .first()
+    )
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"未找到当前企业下的用户 {user_id}",
+        )
+
+    if profile.account_type == "MASTER":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="企业主账号不支持通过子账号权限接口修改",
+        )
+
+    # 构造最终绑定列表
+    desired_bindings: List[WorkspaceBindingItem] = []
+    if req.workspace_bindings is not None:
+        seen_ws = set()
+        for item in req.workspace_bindings:
+            if item.role_code not in VALID_SUB_ROLES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"无效的角色编码: {item.role_code}",
+                )
+            if item.workspace_id in seen_ws:
+                continue
+            seen_ws.add(item.workspace_id)
+            mods = item.allowed_modules if item.role_code == "TENANT_DEVELOPER" else ["*"]
+            desired_bindings.append(
+                WorkspaceBindingItem(
+                    workspace_id=item.workspace_id,
+                    role_code=item.role_code,
+                    allowed_modules=mods,
+                )
+            )
+    else:
+        if req.role_code not in VALID_SUB_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的角色编码: {req.role_code}",
+            )
+        mods = req.allowed_modules if req.role_code == "TENANT_DEVELOPER" else ["*"]
+        for ws_id in dict.fromkeys(req.workspace_ids):
+            desired_bindings.append(
+                WorkspaceBindingItem(
+                    workspace_id=ws_id,
+                    role_code=req.role_code,
+                    allowed_modules=mods,
+                )
+            )
+
+    # 校验所有目标工作空间均属于当前租户且活跃
+    target_ws_ids = [b.workspace_id for b in desired_bindings]
+    if target_ws_ids:
+        valid_workspaces = (
+            db.query(PermTenantWorkspace.workspace_id)
+            .filter(
+                PermTenantWorkspace.tenant_id == ctx.tenant_id,
+                PermTenantWorkspace.workspace_id.in_(target_ws_ids),
+                PermTenantWorkspace.status == 1,
+            )
+            .all()
+        )
+        valid_ws_set = {row[0] for row in valid_workspaces}
+        invalid_ws = [ws_id for ws_id in target_ws_ids if ws_id not in valid_ws_set]
+        if invalid_ws:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"工作空间不存在或不属于当前企业: {', '.join(invalid_ws)}",
+            )
+
+    # 查询旧绑定用于缓存失效
+    old_bindings = (
+        db.query(PermUserRoleWorkspace)
+        .filter_by(tenant_id=ctx.tenant_id, user_id=user_id)
+        .all()
+    )
+    affected_ws_ids = [b.workspace_id for b in old_bindings] + target_ws_ids
+
+    # 替换绑定（显式删除并 flush，避免 SQLAlchemy identity map 残留与唯一键冲突）
+    for ob in old_bindings:
+        db.delete(ob)
+    db.flush()
+
+    for b in desired_bindings:
+        db.add(
+            PermUserRoleWorkspace(
+                tenant_id=ctx.tenant_id,
+                user_id=user_id,
+                workspace_id=b.workspace_id,
+                role_code=b.role_code,
+                allowed_modules=b.allowed_modules,
+            )
+        )
+
+    if req.status is not None:
+        if req.status not in (1, 2):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="账号状态仅支持 1(正常) 或 2(冻结)",
+            )
+        profile.status = req.status
+
+    db.commit()
+    _invalidate_user_perm_cache(ctx.tenant_id, user_id, affected_ws_ids)
+    logger.info(
+        f"Updated sub-account permissions: user_id={user_id}, workspaces={target_ws_ids}, status={profile.status}"
+    )
+
+    ws_ids = [b.workspace_id for b in desired_bindings]
+    roles = list(dict.fromkeys(b.role_code for b in desired_bindings))
+    modules = list(dict.fromkeys(m for b in desired_bindings for m in (b.allowed_modules or [])))
+
+    return ResponseModel(
+        data=SubAccountItemResp(
+            user_id=profile.user_id,
+            username=profile.casdoor_user_id,
+            display_name=profile.casdoor_user_id,
+            phone=None,
+            account_type=profile.account_type,
+            parent_user_id=profile.parent_user_id,
+            tree_path=profile.tree_path,
+            depth_level=profile.depth_level,
+            status=profile.status,
+            workspaces=ws_ids,
+            roles=roles,
+            allowed_modules=modules,
+            workspace_bindings=desired_bindings,
+        )
+    )

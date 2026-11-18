@@ -3,964 +3,1260 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>数智底座用户与角色权限中心</title>
+  <title>数智底座 · 用户与权限中心</title>
   <style>
     :root {
-      --primary: #1677ff;
-      --primary-hover: #4096ff;
-      --primary-light: #e6f4ff;
-      --success: #52c41a;
-      --success-light: #f6ffed;
-      --warning: #faad14;
-      --warning-light: #fffbe6;
-      --error: #ff4d4f;
-      --error-light: #fff2f0;
-      --text-main: #1f2329;
-      --text-secondary: #646a73;
-      --text-muted: #8f959e;
-      --border-color: #dee0e3;
-      --bg-page: #f5f6f7;
-      --bg-card: #ffffff;
-      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-      --radius: 6px;
+      /* 主色 */
+      --primary: #1A4498;
+      --primary-hover: #0056AF;
+      --primary-light: #E6F2FF;
+
+      /* 辅色（状态与强调） */
+      --accent-danger: #FB704B;
+      --accent-warning: #FBAC45;
+      --accent-success: #2FD29B;
+
+      /* 中性色 */
+      --ink-primary: #333333;
+      --ink-pure: #333333;
+      --ink-secondary: #666666;
+      --ink-tertiary: #999999;
+      --ink-inverse: #FFFFFF;
+      --hairline-strong: #CCCCCC;
+      --hairline: #E4E4E4;
+      --bg-fill: #F4F4F4;
+      --bg-fill-soft: #F4F4F4;
+      --bg-canvas: #F3F7FC;
+      --bg-elevated: #F3F7FC;
+      --bg-surface: #FFFFFF;
+      --bg-nav: rgba(255, 255, 255, 0.92);
+
+      --shadow-card: 0 2px 8px rgba(26, 68, 152, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-seg: 0 1px 3px rgba(26, 68, 152, 0.12), 0 1px 1px rgba(0, 0, 0, 0.04);
+      --shadow-sheet: 0 20px 60px rgba(26, 68, 152, 0.16), 0 2px 10px rgba(0, 0, 0, 0.06);
+      --radius-card: 14px;
+      --radius-modal: 16px;
+      --radius-ctrl: 8px;
+      --radius-pill: 999px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: var(--bg-page);
-      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--bg-canvas);
+      color: var(--ink-primary);
       font-size: 14px;
       line-height: 1.5;
     }
 
-    /* Top Context Bar */
+    /* Top Translucent iOS Navigation Bar */
     .top-bar {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border-color);
-      padding: 10px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: var(--shadow-sm);
-    }
-    .top-left { display: flex; align-items: center; gap: 16px; }
-    .brand-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--primary);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 500;
-    }
-    .badge-enterprise { background: #f0f5ff; color: #2f54eb; border: 1px solid #adc6ff; }
-    .badge-personal { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
-    .badge-master { background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
-    .badge-sub { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
-    .badge-role { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
-
-    .top-right { display: flex; align-items: center; gap: 16px; }
-    .ctx-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-    .ctx-label { color: var(--text-secondary); }
-    .ctx-select {
-      padding: 4px 10px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
-      background: white;
-      font-size: 13px;
-      cursor: pointer;
-      outline: none;
-    }
-    .ctx-select:focus { border-color: var(--primary); }
-
-    /* Main Container & Tabs */
-    .app-container {
-      max-width: 1360px;
-      margin: 20px auto;
-      padding: 0 20px;
-    }
-    .tab-nav {
-      display: flex;
-      gap: 8px;
-      border-bottom: 2px solid var(--border-color);
-      margin-bottom: 20px;
-      background: var(--bg-card);
-      padding: 10px 16px 0 16px;
-      border-radius: var(--radius) var(--radius) 0 0;
-    }
-    .tab-btn {
-      padding: 10px 20px;
-      border: none;
-      background: transparent;
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      cursor: pointer;
-      position: relative;
-      margin-bottom: -2px;
-      transition: all 0.2s;
-    }
-    .tab-btn:hover { color: var(--primary); }
-    .tab-btn.active {
-      color: var(--primary);
-      border-bottom: 2px solid var(--primary);
-      font-weight: 600;
-    }
-
-    /* Cards & Content */
-    .content-card {
-      background: var(--bg-card);
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: var(--shadow-sm);
-      margin-bottom: 24px;
-    }
-    .card-header {
+      background: var(--bg-nav);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--hairline);
+      padding: 12px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      gap: 16px;
     }
-    .card-title { font-size: 16px; font-weight: 600; }
-    .action-bar { display: flex; gap: 10px; }
+    .top-left, .top-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--ink-inverse);
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--primary);
+    }
+    .divider-v { width: 1px; height: 16px; background: var(--hairline); }
+    .tenant-name { font-size: 13px; font-weight: 500; color: var(--ink-secondary); }
+
+    .ctx-group { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .ctx-label { color: var(--ink-tertiary); font-size: 12px; }
+    .ctx-select {
+      appearance: none;
+      -webkit-appearance: none;
+      padding: 6px 28px 6px 12px;
+      border: 1px solid var(--hairline-strong);
+      border-radius: var(--radius-ctrl);
+      background: var(--bg-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 9px center;
+      color: var(--ink-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .ctx-select:hover, .ctx-select:focus { border-color: var(--primary); }
+
+    .user-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 6px;
+      border-radius: var(--radius-pill);
+      background: var(--bg-elevated);
+      border: 1px solid var(--hairline);
+    }
+    .user-avatar {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: var(--ink-inverse);
+      font-size: 11px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center;
+      text-transform: uppercase;
+    }
+    .user-name { font-size: 13px; font-weight: 500; color: var(--ink-primary); }
+
+    /* Pills & Badges */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+    .pill-dark { background: var(--primary); color: var(--ink-inverse); }
+    .pill-gray { background: var(--primary-light); color: var(--primary); }
+    .pill-outline { background: var(--bg-surface); color: var(--ink-secondary); border: 1px solid var(--hairline-strong); }
+    .pill-muted { background: var(--bg-fill); color: var(--ink-secondary); }
+
+    /* Main Layout & iOS Segmented Control */
+    .app-container {
+      max-width: 1280px;
+      margin: 24px auto 48px;
+      padding: 0 20px;
+    }
+    .toolbar-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .segmented {
+      display: inline-flex;
+      background: var(--bg-fill);
+      border: 1px solid var(--hairline);
+      padding: 3px;
+      border-radius: 10px;
+      gap: 2px;
+    }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--ink-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 18px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .seg-btn:hover { color: var(--primary); }
+    .seg-btn.active {
+      background: var(--bg-surface);
+      color: var(--primary);
+      font-weight: 600;
+      box-shadow: var(--shadow-seg);
+    }
+
+    /* Surface Cards */
+    .card {
+      background: var(--bg-surface);
+      border-radius: var(--radius-card);
+      border: 1px solid var(--hairline);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .card-title { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-pure); }
+    .card-subtitle { font-size: 12px; color: var(--ink-tertiary); margin-top: 3px; }
+    .card-body { padding: 20px 24px; }
+    .action-bar { display: flex; align-items: center; gap: 8px; }
 
     /* Buttons */
     .btn {
-      padding: 7px 16px;
-      border-radius: var(--radius);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 15px;
+      border-radius: var(--radius-ctrl);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       border: 1px solid transparent;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      font-family: inherit;
     }
-    .btn-primary { background: var(--primary); color: white; }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: var(--ink-inverse); }
     .btn-primary:hover { background: var(--primary-hover); }
-    .btn-default { background: white; border-color: var(--border-color); color: var(--text-main); }
-    .btn-default:hover { border-color: var(--primary); color: var(--primary); }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-secondary { background: var(--bg-surface); color: var(--ink-primary); border-color: var(--hairline-strong); }
+    .btn-secondary:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+    .btn-ghost { background: transparent; color: var(--ink-secondary); }
+    .btn-ghost:hover { background: rgba(251, 112, 75, 0.1); color: var(--accent-danger); }
+    .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+    .btn:disabled { opacity: 0.42; cursor: not-allowed; }
 
-    /* Tables */
-    .custom-table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
+    /* Table */
+    .table-wrap { width: 100%; overflow-x: auto; }
+    .ios-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .ios-table th {
+      padding: 11px 16px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--hairline);
+      white-space: nowrap;
     }
-    .custom-table th {
-      background: #fafafa;
-      padding: 12px 14px;
-      font-weight: 600;
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--border-color);
+    .ios-table td {
+      padding: 14px 16px;
       font-size: 13px;
+      color: var(--ink-primary);
+      border-bottom: 1px solid var(--hairline);
+      vertical-align: middle;
     }
-    .custom-table td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border-color);
-      font-size: 13px;
+    .ios-table tbody tr:last-child td { border-bottom: none; }
+    .ios-table tbody tr:hover td { background: var(--bg-elevated); }
+
+    .tree-cell { display: flex; align-items: center; gap: 6px; }
+    .tree-branch {
+      color: var(--ink-tertiary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      user-select: none;
     }
-    .custom-table tr:hover td { background: #fafbfc; }
+    .member-name { font-weight: 600; color: var(--ink-primary); }
+    .mono-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      color: var(--ink-secondary);
+      background: var(--bg-fill);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+    .chip-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+    .status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+    .status-dot::before {
+      content: "";
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-active { color: var(--ink-primary); }
+    .status-active::before { background: var(--accent-success); }
+    .status-frozen { color: var(--ink-secondary); }
+    .status-frozen::before { background: var(--accent-warning); }
 
     /* Workspace Cards Grid */
     .ws-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 16px;
     }
     .ws-card {
-      background: white;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
-      padding: 16px;
-      transition: all 0.2s;
-      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-card);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
     }
     .ws-card:hover {
-      box-shadow: var(--shadow-md);
       border-color: var(--primary);
+      box-shadow: 0 6px 20px rgba(26, 68, 152, 0.08);
+      transform: translateY(-1px);
     }
-    .ws-card.default-ws { border-left: 4px solid var(--primary); }
-    .ws-card-header {
+    .ws-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .ws-name { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-pure); }
+    .ws-meta {
+      background: var(--bg-elevated);
+      border-radius: 12px;
+      padding: 4px 12px;
+      margin-bottom: 16px;
+    }
+    .ws-meta-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
-    }
-    .ws-name { font-size: 15px; font-weight: 600; }
-    .ws-info-row {
-      display: flex;
+      padding: 7px 0;
       font-size: 12px;
-      color: var(--text-secondary);
-      margin: 4px 0;
-      justify-content: space-between;
+      border-bottom: 1px solid var(--hairline);
+      gap: 12px;
     }
-    .ws-info-val { color: var(--text-main); font-family: monospace; }
+    .ws-meta-row:last-child { border-bottom: none; }
+    .ws-meta-key { color: var(--ink-tertiary); flex-shrink: 0; }
+    .ws-meta-val {
+      color: var(--ink-primary);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ws-card-foot {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+    }
 
-    /* Modals and Drawers */
+    /* Modals (iOS Sheet) */
     .modal-overlay {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.45);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       display: none;
       justify-content: center;
       align-items: center;
       z-index: 1000;
+      padding: 16px;
     }
     .modal-overlay.active { display: flex; }
     .modal-box {
-      background: white;
-      border-radius: var(--radius);
-      width: 540px;
-      max-width: 90vw;
-      box-shadow: var(--shadow-md);
+      background: var(--bg-surface);
+      border-radius: var(--radius-modal);
+      width: 560px;
+      max-width: 100%;
+      box-shadow: var(--shadow-sheet);
       overflow: hidden;
-      animation: modalFadeIn 0.2s ease;
+      animation: sheetIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    @keyframes modalFadeIn {
-      from { transform: translateY(-20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
+    .modal-box.modal-lg { width: 700px; }
+    @keyframes sheetIn {
+      from { transform: translateY(14px) scale(0.98); opacity: 0; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
     }
     .modal-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--border-color);
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--hairline);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
     }
-    .modal-title { font-size: 16px; font-weight: 600; }
+    .modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink-pure); }
+    .modal-sub { font-size: 12px; color: var(--ink-tertiary); margin-top: 2px; }
     .modal-close {
-      cursor: pointer;
-      font-size: 18px;
-      color: var(--text-muted);
+      width: 28px; height: 28px;
+      border-radius: 50%;
       border: none;
-      background: none;
+      background: var(--bg-canvas);
+      color: var(--ink-secondary);
+      font-size: 16px;
+      cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
     }
-    .modal-body {
-      padding: 20px;
-      max-height: 75vh;
-      overflow-y: auto;
-    }
+    .modal-close:hover { background: var(--bg-fill); color: var(--ink-pure); }
+    .modal-body { padding: 20px 22px; max-height: 74vh; overflow-y: auto; }
     .modal-footer {
-      padding: 12px 20px;
-      border-top: 1px solid var(--border-color);
+      padding: 14px 22px;
+      border-top: 1px solid var(--hairline);
       display: flex;
       justify-content: flex-end;
-      gap: 10px;
-      background: #fafafa;
+      gap: 8px;
+      background: var(--bg-elevated);
     }
 
     /* Forms */
     .form-group { margin-bottom: 16px; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .form-label {
       display: block;
       margin-bottom: 6px;
-      font-weight: 500;
-      font-size: 13px;
-      color: var(--text-main);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-secondary);
     }
-    .form-label span.req { color: var(--error); margin-left: 2px; }
+    .form-label .req { color: var(--accent-danger); margin-left: 2px; }
     .form-input, .form-select {
       width: 100%;
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
+      padding: 9px 12px;
+      border: 1px solid var(--hairline-strong);
+      border-radius: var(--radius-ctrl);
+      background: var(--bg-surface);
+      color: var(--ink-primary);
       font-size: 13px;
+      font-family: inherit;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .form-input:focus, .form-select:focus { border-color: var(--primary); }
-    .role-radio-group {
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26, 68, 152, 0.12);
+    }
+
+    .role-grid, .platform-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
-      margin-top: 6px;
     }
-    .role-radio-item {
-      border: 1px solid var(--border-color);
-      padding: 10px;
-      border-radius: var(--radius);
+    .option-card {
+      border: 1px solid var(--hairline-strong);
+      border-radius: 10px;
+      padding: 11px 12px;
       cursor: pointer;
       display: flex;
       align-items: flex-start;
-      gap: 8px;
-      transition: all 0.2s;
+      gap: 9px;
+      background: var(--bg-surface);
+      transition: all 0.15s;
     }
-    .role-radio-item:hover { border-color: var(--primary); }
-    .role-radio-item.selected {
+    .option-card:hover { border-color: var(--primary); background: var(--bg-elevated); }
+    .option-card.selected {
       border-color: var(--primary);
       background: var(--primary-light);
+      box-shadow: inset 0 0 0 1px var(--primary);
     }
-    .role-title { font-size: 13px; font-weight: 600; }
-    .role-desc { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .option-card input[type="radio"] { accent-color: var(--primary); margin-top: 2px; }
+    .option-title { font-size: 13px; font-weight: 600; color: var(--ink-primary); }
+    .option-desc { font-size: 11px; color: var(--ink-secondary); margin-top: 2px; }
 
-    .module-checkbox-group {
-      background: #fafbfc;
-      border: 1px solid var(--border-color);
-      padding: 12px;
-      border-radius: var(--radius);
-      margin-top: 10px;
+    .check-panel {
+      background: var(--bg-elevated);
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      padding: 10px 12px;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
-    .module-item {
+    .check-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--ink-primary);
       cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 8px;
+    }
+    .check-item:hover { background: var(--primary-light); }
+    .check-item input[type="checkbox"] { accent-color: var(--primary); width: 15px; height: 15px; }
+
+    /* Workspace Members Management Sheet */
+    .ws-add-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 18px;
+    }
+    .ws-add-title { font-size: 12px; font-weight: 600; color: var(--ink-secondary); margin-bottom: 10px; }
+    .ws-add-row { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 8px; align-items: center; }
+    .ws-member-list {
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .ws-member-item {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--hairline);
+      background: var(--bg-surface);
+    }
+    .ws-member-item:last-child { border-bottom: none; }
+    .ws-member-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .ws-member-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ws-member-edit {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--hairline-strong);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
-    /* Notification Toast */
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 42px 20px;
+      color: var(--ink-tertiary);
+      font-size: 13px;
+    }
+
+    /* Floating HUD Toast */
     .toast {
       position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      background: white;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-md);
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      padding: 10px 18px;
+      border-radius: var(--radius-pill);
+      background: rgba(26, 68, 152, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      color: var(--ink-inverse);
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 8px 28px rgba(26, 68, 152, 0.24);
       display: none;
       align-items: center;
       gap: 8px;
       z-index: 2000;
-      animation: toastSlide 0.2s ease;
-      font-size: 14px;
     }
-    .toast.success { border-left: 4px solid var(--success); display: flex; }
-    .toast.error { border-left: 4px solid var(--error); display: flex; }
-    @keyframes toastSlide {
-      from { transform: translateX(50px); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+    .toast.show { display: inline-flex; animation: hudIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes hudIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @media (max-width: 720px) {
+      .form-row-2, .role-grid, .platform-grid, .check-panel, .ws-add-row { grid-template-columns: 1fr; }
+      .top-bar { padding: 12px 16px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Context Switcher Bar -->
+  <!-- Top iOS Translucent Navigation Bar -->
   <header class="top-bar">
     <div class="top-left">
-      <div class="brand-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-        数智底座用户与角色权限中心
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </span>
+        <span class="brand-title">用户与权限中心</span>
       </div>
-      <div id="tenant-badge" class="badge badge-enterprise">企业租户</div>
-      <span id="tenant-name" style="font-weight: 500; font-size: 13px;">加载中...</span>
+      <span class="divider-v"></span>
+      <span id="tenant-badge" class="pill pill-dark">企业租户</span>
+      <span id="tenant-name" class="tenant-name">加载中...</span>
     </div>
 
     <div class="top-right">
-      <div class="ctx-item">
-        <span class="ctx-label">当前空间:</span>
+      <div class="ctx-group">
+        <span class="ctx-label">当前空间</span>
         <select id="ws-select" class="ctx-select" onchange="onWorkspaceChanged(this.value)">
           <option value="">加载中...</option>
         </select>
       </div>
-      <div class="ctx-item">
-        <span id="user-display" style="font-weight: 500;">未登录</span>
-        <span id="role-badge" class="badge badge-role">TENANT_ADMIN</span>
+      <div class="user-chip">
+        <span id="user-avatar" class="user-avatar">U</span>
+        <span id="user-display" class="user-name">加载中</span>
+        <span id="role-badge" class="pill pill-gray">管理员</span>
       </div>
-      <button class="btn btn-default btn-sm" onclick="showTicketJumpModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        跳往子平台
-      </button>
     </div>
   </header>
 
-  <!-- App Main Content -->
+  <!-- Main Content -->
   <main class="app-container">
-    <nav class="tab-nav">
-      <button class="tab-btn active" onclick="switchTab('members', this)">企业成员与权限</button>
-      <button class="tab-btn" onclick="switchTab('workspaces', this)">工作空间管理</button>
-      <button class="tab-btn" onclick="switchTab('apikeys', this)">能力商店 API Key</button>
-    </nav>
+    <div class="toolbar-row">
+      <nav class="segmented" role="tablist">
+        <button class="seg-btn active" role="tab" onclick="switchTab('members', this)">企业成员与权限</button>
+        <button class="seg-btn" role="tab" onclick="switchTab('workspaces', this)">工作空间管理</button>
+      </nav>
+    </div>
 
     <!-- Tab 1: Members Management -->
-    <section id="tab-members" class="content-card">
+    <section id="tab-members" class="card">
       <div class="card-header">
         <div>
           <div class="card-title">企业成员与角色树</div>
-          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-            基于物化路径树管理企业主账号及下属研发、财务、运营各角色子账号
-          </div>
+          <div class="card-subtitle">管理企业主账号与下属子账号的工作空间授权、角色及模块准入范围</div>
         </div>
         <div class="action-bar">
-          <button class="btn btn-default" onclick="loadSubAccountTree()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          <button class="btn btn-secondary" onclick="loadSubAccountTree()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             刷新
-          </button>
-          <button class="btn btn-primary" onclick="openCreateSubModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            新建子账号
           </button>
         </div>
       </div>
 
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>账号 / 用户名</th>
-            <th>类型</th>
-            <th>物化层级与路径</th>
-            <th>授权工作空间</th>
-            <th>标准角色</th>
-            <th>准入模块白名单</th>
-            <th>状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="member-table-body">
-          <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">正在加载企业主子账号数据...</td></tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="ios-table">
+          <thead>
+            <tr>
+              <th>成员账号</th>
+              <th>类型</th>
+              <th>组织层级</th>
+              <th>授权工作空间</th>
+              <th>标准角色</th>
+              <th>准入模块</th>
+              <th>状态</th>
+              <th style="text-align: right;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="member-table-body">
+            <tr><td colspan="8" class="empty-state">正在加载成员数据...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- Tab 2: Workspace Management -->
-    <section id="tab-workspaces" class="content-card" style="display: none;">
+    <section id="tab-workspaces" class="card" style="display: none;">
       <div class="card-header">
         <div>
-          <div class="card-title">工作空间与底层底座映射</div>
-          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-            多工作空间物理隔离，无缝映射底层 K8s Namespace、模型工程项目及 Agent 沙箱空间
-          </div>
+          <div class="card-title">工作空间管理</div>
+          <div class="card-subtitle">管理企业工作空间、空间成员权限与底座入口</div>
         </div>
         <div class="action-bar">
-          <button class="btn btn-default" onclick="loadWorkspaces()">刷新</button>
-          <button class="btn btn-primary" onclick="openCreateWsModal()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <button class="btn btn-secondary" onclick="loadWorkspaces()">刷新</button>
+          <button id="btn-create-ws" class="btn btn-primary" onclick="openCreateWsModal()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             新建工作空间
           </button>
         </div>
       </div>
-
-      <div id="ws-cards-grid" class="ws-grid">
-        <!-- Render Workspace Cards Dynamically -->
+      <div class="card-body">
+        <div id="ws-cards-grid" class="ws-grid"></div>
       </div>
-    </section>
-
-    <!-- Tab 3: API Key Management -->
-    <section id="tab-apikeys" class="content-card" style="display: none;">
-      <div class="card-header">
-        <div>
-          <div class="card-title">能力商店 API Key 凭证</div>
-          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-            供外部调用模型工程、Agent 推理及数据流通的 OpenAPI 认证凭证（支持双 Key 平滑轮换）
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="alert('第二目标接口已预留，可在 Step 7 体验凭证生成与平滑轮换！')">+ 新建 API Key</button>
-      </div>
-      <table class="custom-table">
-        <thead>
-          <tr><th>凭证名称</th><th>Access Key (AK)</th><th>状态</th><th>白名单 Scope</th><th>QPS限流</th><th>过期时间</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>默认企业推理凭证</strong></td>
-            <td><code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">ak-prod-kunshan-888801</code></td>
-            <td><span class="badge" style="background: #e6f4ff; color: #1677ff;">ACTIVE</span></td>
-            <td><code>platform:model_engine:api:*</code></td>
-            <td>100 次/秒</td>
-            <td>2027-12-31</td>
-          </tr>
-        </tbody>
-      </table>
     </section>
   </main>
 
-  <!-- Modal 1: Create Sub Account -->
-  <div id="modal-sub" class="modal-overlay">
+  <!-- Modal 1: Edit Sub Account Permissions -->
+  <div id="modal-edit-sub" class="modal-overlay" onclick="onOverlayClick(event, 'modal-edit-sub')">
     <div class="modal-box">
       <div class="modal-header">
-        <div class="modal-title">新建企业子账号</div>
-        <button class="modal-close" onclick="closeModal('modal-sub')">&times;</button>
+        <div>
+          <div class="modal-title">编辑子账号权限</div>
+          <div id="edit-sub-subtitle" class="modal-sub">-</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-edit-sub')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body">
+        <input type="hidden" id="edit-sub-userid">
         <div class="form-group">
-          <label class="form-label">登录用户名<span class="req">*</span></label>
-          <input id="sub-username" class="form-input" placeholder="字母/下划线，如 dev_algo_01">
+          <label class="form-label">账号状态</label>
+          <div class="segmented" style="width: 100%; display: grid; grid-template-columns: 1fr 1fr;">
+            <button type="button" id="edit-status-1" class="seg-btn active" onclick="setEditStatus(1)">正常启用</button>
+            <button type="button" id="edit-status-2" class="seg-btn" onclick="setEditStatus(2)">已冻结</button>
+          </div>
         </div>
         <div class="form-group">
-          <label class="form-label">登录密码<span class="req">*</span></label>
-          <input id="sub-password" class="form-input" type="password" value="Password123!@#" placeholder="密码">
+          <label class="form-label">授权工作空间 (可多选)<span class="req">*</span></label>
+          <div id="edit-workspaces-box" class="check-panel"></div>
         </div>
         <div class="form-group">
-          <label class="form-label">员工姓名 / 显示名<span class="req">*</span></label>
-          <input id="sub-display" class="form-input" placeholder="如 李工(大模型研发)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">联系手机号</label>
-          <input id="sub-phone" class="form-input" placeholder="13800000000">
-        </div>
-        <div class="form-group">
-          <label class="form-label">所属直接上级</label>
-          <select id="sub-parent" class="form-select">
-            <option value="">默认直接挂在主账号下</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">授权工作空间<span class="req">*</span></label>
-          <select id="sub-workspaces" class="form-select"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">分配租户标准角色<span class="req">*</span></label>
-          <div class="role-radio-group">
-            <div class="role-radio-item" onclick="selectRole('TENANT_DEVELOPER', this)">
-              <input type="radio" name="role" value="TENANT_DEVELOPER" checked>
+          <label class="form-label">租户标准角色<span class="req">*</span></label>
+          <div id="edit-role-grid" class="role-grid">
+            <div class="option-card" data-role="TENANT_DEVELOPER" onclick="selectEditRole('TENANT_DEVELOPER', this)">
+              <input type="radio" name="edit-role" value="TENANT_DEVELOPER">
               <div>
-                <div class="role-title">研发专家 (DEVELOPER)</div>
-                <div class="role-desc">模型训练、算力调度与沙箱操作</div>
+                <div class="option-title">研发专家</div>
+                <div class="option-desc">模型训练、算力调度与沙箱操作</div>
               </div>
             </div>
-            <div class="role-radio-item" onclick="selectRole('TENANT_ADMIN', this)">
-              <input type="radio" name="role" value="TENANT_ADMIN">
+            <div class="option-card" data-role="TENANT_ADMIN" onclick="selectEditRole('TENANT_ADMIN', this)">
+              <input type="radio" name="edit-role" value="TENANT_ADMIN">
               <div>
-                <div class="role-title">企业管理员 (ADMIN)</div>
-                <div class="role-desc">空间配置与组织子账号管理</div>
+                <div class="option-title">企业管理员</div>
+                <div class="option-desc">工作空间配置与子账号权限管理</div>
               </div>
             </div>
-            <div class="role-radio-item" onclick="selectRole('TENANT_FINANCE', this)">
-              <input type="radio" name="role" value="TENANT_FINANCE">
+            <div class="option-card" data-role="TENANT_FINANCE" onclick="selectEditRole('TENANT_FINANCE', this)">
+              <input type="radio" name="edit-role" value="TENANT_FINANCE">
               <div>
-                <div class="role-title">财务审计 (FINANCE)</div>
-                <div class="role-desc">算力消费账单与调用核算</div>
+                <div class="option-title">财务审计</div>
+                <div class="option-desc">算力消费账单与调用核算</div>
               </div>
             </div>
-            <div class="role-radio-item" onclick="selectRole('TENANT_VIEWER', this)">
-              <input type="radio" name="role" value="TENANT_VIEWER">
+            <div class="option-card" data-role="TENANT_VIEWER" onclick="selectEditRole('TENANT_VIEWER', this)">
+              <input type="radio" name="edit-role" value="TENANT_VIEWER">
               <div>
-                <div class="role-title">只读访客 (VIEWER)</div>
-                <div class="role-desc">仅可查看概览看板与资源</div>
+                <div class="option-title">只读访客</div>
+                <div class="option-desc">仅可查看概览看板与空间资源</div>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Dynamic Module Selection (Shown when TENANT_DEVELOPER is selected) -->
-        <div id="module-select-box" class="form-group">
-          <label class="form-label">研发大模块准入白名单 (可多选)</label>
-          <div class="module-checkbox-group">
-            <label class="module-item">
-              <input type="checkbox" name="module" value="platform:model_engine:module:*" checked>
-              模型工程平台
-            </label>
-            <label class="module-item">
-              <input type="checkbox" name="module" value="platform:compute:module:k8s" checked>
-              算力调度集群
-            </label>
-            <label class="module-item">
-              <input type="checkbox" name="module" value="platform:agent:module:*">
-              Agent 工程沙箱
-            </label>
-            <label class="module-item">
-              <input type="checkbox" name="module" value="platform:caict_data:module:*">
-              信通院数据工程
-            </label>
+        <div id="edit-module-box" class="form-group">
+          <label class="form-label">研发模块准入白名单 (可多选)</label>
+          <div class="check-panel">
+            <label class="check-item"><input type="checkbox" name="edit-module" value="platform:model_engine:module:*"> 模型工程平台</label>
+            <label class="check-item"><input type="checkbox" name="edit-module" value="platform:compute:module:k8s"> 算力调度集群</label>
+            <label class="check-item"><input type="checkbox" name="edit-module" value="platform:agent:module:*"> Agent 工程沙箱</label>
+            <label class="check-item"><input type="checkbox" name="edit-module" value="platform:caict_data:module:*"> 信通院数据工程</label>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-default" onclick="closeModal('modal-sub')">取消</button>
-        <button class="btn btn-primary" onclick="submitCreateSubAccount()">立即创建并授权</button>
+        <button class="btn btn-secondary" onclick="closeModal('modal-edit-sub')">取消</button>
+        <button class="btn btn-primary" onclick="submitEditSubAccount()">保存更改</button>
       </div>
     </div>
   </div>
 
   <!-- Modal 2: Create Workspace -->
-  <div id="modal-ws" class="modal-overlay">
+  <div id="modal-ws" class="modal-overlay" onclick="onOverlayClick(event, 'modal-ws')">
     <div class="modal-box">
       <div class="modal-header">
-        <div class="modal-title">新建项目工作空间</div>
-        <button class="modal-close" onclick="closeModal('modal-ws')">&times;</button>
+        <div>
+          <div class="modal-title">新建工作空间</div>
+          <div class="modal-sub">创建一个新的项目工作空间用于隔离成员权限</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-ws')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label">工作空间显示名称<span class="req">*</span></label>
+          <label class="form-label">工作空间名称<span class="req">*</span></label>
           <input id="ws-name-input" class="form-input" placeholder="如 具身智能专项研发空间">
-        </div>
-        <div class="form-group">
-          <label class="form-label">映射 K8s Namespace</label>
-          <input id="ws-k8s-input" class="form-input" placeholder="ns-embodied-ai-01 (选填，默认自生成)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">映射模型工程平台项目ID</label>
-          <input id="ws-model-input" class="form-input" placeholder="prj-model-001 (选填)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">映射 Agent 工程沙箱ID</label>
-          <input id="ws-agent-input" class="form-input" placeholder="sbx-agent-01 (选填)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">映射信通院数据空间ID</label>
-          <input id="ws-caict-input" class="form-input" placeholder="caict-ws-001 (选填)">
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-default" onclick="closeModal('modal-ws')">取消</button>
+        <button class="btn btn-secondary" onclick="closeModal('modal-ws')">取消</button>
         <button class="btn btn-primary" onclick="submitCreateWorkspace()">确认创建</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal 3: Jump Ticket Issue Display -->
-  <div id="modal-jump" class="modal-overlay">
-    <div class="modal-box">
+  <!-- Modal 4: Workspace Members Management -->
+  <div id="modal-ws-members" class="modal-overlay" onclick="onOverlayClick(event, 'modal-ws-members')">
+    <div class="modal-box modal-lg">
       <div class="modal-header">
-        <div class="modal-title">跨平台免密跳转换票 (Jump Ticket)</div>
-        <button class="modal-close" onclick="closeModal('modal-jump')">&times;</button>
+        <div>
+          <div id="ws-members-title" class="modal-title">工作空间成员管理</div>
+          <div id="ws-members-subtitle" class="modal-sub">-</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-ws-members')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">目标跳转子平台</label>
-          <select id="jump-platform" class="form-select">
-            <option value="MODEL_ENGINE">模型工程平台 (MODEL_ENGINE)</option>
-            <option value="COMPUTE">算力调度平台 (COMPUTE)</option>
-            <option value="AGENT">Agent 工程沙箱 (AGENT)</option>
-            <option value="CAICT_DATA_ENG">信通院数据工程平台 (CAICT_DATA_ENG)</option>
-          </select>
-        </div>
-        <div id="ticket-result-box" style="display: none; background: #fafbfc; border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius); margin-top: 14px;">
-          <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">AES-256 加密单次 Ticket (60s 有效，Redis 原子核销):</div>
-          <textarea id="ticket-val-area" class="form-input" rows="3" readonly style="font-family: monospace; font-size: 11px;"></textarea>
-          <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 12px; color: var(--success); font-weight: 500;">✓ 单次票据已就绪，可模拟子平台核销</span>
-            <button class="btn btn-default btn-sm" onclick="simulateSubplatformVerify()">模拟子平台验证核销</button>
+        <div id="ws-add-member-panel" class="ws-add-box">
+          <div class="ws-add-title">添加成员到此工作空间</div>
+          <div id="ws-add-controls">
+            <div class="ws-add-row">
+              <select id="ws-add-user-select" class="form-select"></select>
+              <select id="ws-add-role-select" class="form-select" onchange="toggleWsAddModules()">
+                <option value="TENANT_DEVELOPER">研发专家</option>
+                <option value="TENANT_ADMIN">企业管理员</option>
+                <option value="TENANT_FINANCE">财务审计</option>
+                <option value="TENANT_VIEWER">只读访客</option>
+              </select>
+              <button class="btn btn-primary" onclick="submitAddWorkspaceMember()">添加成员</button>
+            </div>
+            <div id="ws-add-modules-box" class="check-panel" style="margin-top: 10px;">
+              <label class="check-item"><input type="checkbox" name="ws-add-module" value="platform:model_engine:module:*" checked> 模型工程平台</label>
+              <label class="check-item"><input type="checkbox" name="ws-add-module" value="platform:compute:module:k8s" checked> 算力调度集群</label>
+              <label class="check-item"><input type="checkbox" name="ws-add-module" value="platform:agent:module:*"> Agent 工程沙箱</label>
+              <label class="check-item"><input type="checkbox" name="ws-add-module" value="platform:caict_data:module:*"> 信通院数据工程</label>
+            </div>
           </div>
+          <div id="ws-add-empty-hint" style="display: none; font-size: 12px; color: var(--ink-tertiary);">
+            当前企业下所有成员均已加入此工作空间。
+          </div>
+        </div>
+
+        <div class="form-label" style="margin-bottom: 8px;">当前空间已授权成员 (<span id="ws-member-count">0</span>)</div>
+        <div id="ws-members-list" class="ws-member-list">
+          <div class="empty-state">加载中...</div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-default" onclick="closeModal('modal-jump')">关闭</button>
-        <button class="btn btn-primary" onclick="requestJumpTicket()">立即签发 60s 票据</button>
+        <button class="btn btn-primary" onclick="closeModal('modal-ws-members')">完成</button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Notification -->
-  <div id="toast" class="toast success">
+  <!-- Modal 5: Enter Base Platform (Production Launcher) -->
+  <div id="modal-enter-platform" class="modal-overlay" onclick="onOverlayClick(event, 'modal-enter-platform')">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">进入底座平台</div>
+          <div id="enter-ws-subtitle" class="modal-sub">请选择要进入的子平台</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-enter-platform')" aria-label="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="platform-grid" class="platform-grid">
+          <div class="option-card selected" data-platform="MODEL_ENGINE" onclick="selectTargetPlatform('MODEL_ENGINE', this)">
+            <input type="radio" name="target-platform" value="MODEL_ENGINE" checked>
+            <div>
+              <div class="option-title">模型工程平台</div>
+              <div class="option-desc">模型训练、微调与推理部署</div>
+            </div>
+          </div>
+          <div class="option-card" data-platform="COMPUTE" onclick="selectTargetPlatform('COMPUTE', this)">
+            <input type="radio" name="target-platform" value="COMPUTE">
+            <div>
+              <div class="option-title">算力调度平台</div>
+              <div class="option-desc">K8s 算力资源监控与任务调度</div>
+            </div>
+          </div>
+          <div class="option-card" data-platform="AGENT" onclick="selectTargetPlatform('AGENT', this)">
+            <input type="radio" name="target-platform" value="AGENT">
+            <div>
+              <div class="option-title">Agent 工程沙箱</div>
+              <div class="option-desc">智能体编排、工具链与沙箱测试</div>
+            </div>
+          </div>
+          <div class="option-card" data-platform="CAICT_DATA_ENG" onclick="selectTargetPlatform('CAICT_DATA_ENG', this)">
+            <input type="radio" name="target-platform" value="CAICT_DATA_ENG">
+            <div>
+              <div class="option-title">信通院数据工程</div>
+              <div class="option-desc">工业语料治理与可信数据流通</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-enter-platform')">取消</button>
+        <button id="btn-confirm-enter" class="btn btn-primary" onclick="confirmEnterPlatform()">确认进入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- iOS Floating HUD Toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite">
     <span id="toast-text">操作成功</span>
   </div>
 
   <script>
-    // State
     const API_BASE = '/api/v1';
+
+    const ROLE_LABELS = {
+      PLATFORM_ADMIN: '平台管理员',
+      PLATFORM_OPERATOR: '平台运营',
+      PLATFORM_DEMO: '演示账号',
+      TENANT_ADMIN: '企业管理员',
+      TENANT_DEVELOPER: '研发专家',
+      TENANT_FINANCE: '财务审计',
+      TENANT_VIEWER: '只读访客',
+    };
+
+    const MODULE_OPTIONS = [
+      { value: 'platform:model_engine:module:*', label: '模型工程' },
+      { value: 'platform:compute:module:k8s', label: '算力调度' },
+      { value: 'platform:agent:module:*', label: 'Agent 沙箱' },
+      { value: 'platform:caict_data:module:*', label: '数据工程' },
+    ];
+
+    const PLATFORM_LABELS = {
+      MODEL_ENGINE: '模型工程平台',
+      COMPUTE: '算力调度平台',
+      AGENT: 'Agent 工程沙箱',
+      CAICT_DATA_ENG: '信通院数据工程',
+    };
+
     let currentAuth = {
       token: '',
       userId: '',
+      username: '',
+      accountType: 'MASTER',
       tenantId: '',
+      tenantName: '',
       tenantType: 'ENTERPRISE',
       defaultWorkspaceId: '',
       roleCode: 'TENANT_ADMIN',
     };
+
     let workspaceList = [];
     let memberList = [];
-    let selectedRoleCode = 'TENANT_DEVELOPER';
+    let editRoleCode = 'TENANT_DEVELOPER';
+    let editStatusVal = 1;
+    let activeManageWsId = '';
+    let activeManageWsMembers = [];
+    let editingWsMemberUserId = '';
+    let activeEnterWsId = '';
+    let selectedPlatform = 'MODEL_ENGINE';
+    let toastTimer = null;
 
-    // Helper: Toast
-    function showToast(text, type = 'success') {
-      const toast = document.getElementById('toast');
-      const textElem = document.getElementById('toast-text');
-      toast.className = `toast ${type}`;
-      textElem.innerText = text;
-      toast.style.display = 'flex';
-      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    function esc(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    // Helper: Fetch with Authorization
+    function isManager() {
+      return (
+        currentAuth.accountType === 'MASTER' ||
+        currentAuth.roleCode === 'TENANT_ADMIN' ||
+        currentAuth.roleCode === 'PLATFORM_ADMIN'
+      );
+    }
+
+    function formatRole(code) {
+      return ROLE_LABELS[code] || code || '-';
+    }
+
+    function formatModuleLabel(mod) {
+      if (!mod || mod === '*' || mod === 'all') return '全平台模块';
+      const found = MODULE_OPTIONS.find(m => m.value === mod);
+      if (found) return found.label;
+      if (mod.includes('model_engine')) return '模型工程';
+      if (mod.includes('compute')) return '算力调度';
+      if (mod.includes('agent')) return 'Agent 沙箱';
+      if (mod.includes('caict_data')) return '数据工程';
+      return mod.replace(/^platform:/, '');
+    }
+
+    function getWorkspaceName(wsId) {
+      const ws = workspaceList.find(w => w.workspace_id === wsId);
+      return ws ? ws.workspace_name : wsId;
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-text').innerText = text;
+      toast.classList.remove('show');
+      void toast.offsetWidth;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.classList.remove('show'); }, 2800);
+    }
+
     async function apiFetch(endpoint, options = {}) {
-      const headers = options.headers || {};
-      if (currentAuth.token) {
-        headers['Authorization'] = `Bearer ${currentAuth.token}`;
-      }
-      if (currentAuth.userId) {
-        headers['X-Portal-User-Id'] = currentAuth.userId;
-      }
-      if (currentAuth.tenantId) {
-        headers['X-Portal-Tenant-Id'] = currentAuth.tenantId;
-      }
+      const headers = Object.assign({}, options.headers || {});
+      if (currentAuth.token) headers['Authorization'] = `Bearer ${currentAuth.token}`;
+      if (currentAuth.userId) headers['X-Portal-User-Id'] = currentAuth.userId;
+      if (currentAuth.tenantId) headers['X-Portal-Tenant-Id'] = currentAuth.tenantId;
       options.headers = headers;
 
       const res = await fetch(`${API_BASE}${endpoint}`, options);
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+        const msg = (data && (data.detail || data.message || (data.SYS_BODY && data.SYS_BODY.BIZ_MSG))) || `HTTP ${res.status}`;
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
       }
       return data;
     }
 
-    // Tab Switching
-    function switchTab(tabName, btnElem) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      btnElem.classList.add('active');
+    function openModal(id) { document.getElementById(id).classList.add('active'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function onOverlayClick(e, id) { if (e.target === e.currentTarget) closeModal(id); }
 
+    function switchTab(tabName, btnElem) {
+      document.querySelectorAll('.toolbar-row .seg-btn').forEach(b => b.classList.remove('active'));
+      btnElem.classList.add('active');
       document.getElementById('tab-members').style.display = tabName === 'members' ? 'block' : 'none';
       document.getElementById('tab-workspaces').style.display = tabName === 'workspaces' ? 'block' : 'none';
-      document.getElementById('tab-apikeys').style.display = tabName === 'apikeys' ? 'block' : 'none';
-
       if (tabName === 'members') loadSubAccountTree();
       if (tabName === 'workspaces') loadWorkspaces();
     }
 
-    // Role Selection in Drawer
-    function selectRole(roleCode, elem) {
-      selectedRoleCode = roleCode;
-      document.querySelectorAll('.role-radio-item').forEach(i => i.classList.remove('selected'));
-      elem.classList.add('selected');
-      const radio = elem.querySelector('input[type="radio"]');
-      if (radio) radio.checked = true;
-
-      const moduleBox = document.getElementById('module-select-box');
-      if (roleCode === 'TENANT_DEVELOPER') {
-        moduleBox.style.display = 'block';
-      } else {
-        moduleBox.style.display = 'none';
-      }
-    }
-
-    // Modal Control
-    function openModal(id) { document.getElementById(id).classList.add('active'); }
-    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-
-    // Init Session & Token Exchange
     async function initSession() {
       const urlParams = new URLSearchParams(window.location.search);
-      let portalToken = urlParams.get('portal_token');
-
-      if (!portalToken) {
-        portalToken = 'token_p_9001_zhangsan'; // Default demo token
-      }
+      const portalToken = urlParams.get('portal_token') || 'token_p_9001_zhangsan';
 
       try {
         const resp = await fetch(`${API_BASE}/sso/exchange-iframe-session?portal_token=${encodeURIComponent(portalToken)}`);
         const json = await resp.json();
-        if (json.code === 200) {
+        if (json.code === 200 && json.data) {
           const d = json.data;
           currentAuth = {
             token: d.token,
             userId: d.user_id,
+            username: d.username || d.user_id,
+            accountType: d.account_type || 'MASTER',
             tenantId: d.tenant_id,
-            tenantType: d.tenant_type,
-            defaultWorkspaceId: d.default_workspace_id,
+            tenantName: d.tenant_name || d.tenant_id,
+            tenantType: d.tenant_type || 'ENTERPRISE',
+            defaultWorkspaceId: d.default_workspace_id || '',
             roleCode: d.role_code || 'TENANT_ADMIN',
           };
-          document.getElementById('user-display').innerText = d.user_id;
-          document.getElementById('role-badge').innerText = currentAuth.roleCode;
-          document.getElementById('tenant-name').innerText = d.tenant_id;
-          document.getElementById('tenant-badge').innerText = d.tenant_type === 'ENTERPRISE' ? '企业租户' : '个人租户';
 
-          // Load Workspaces & Members
+          document.getElementById('user-display').innerText = currentAuth.username;
+          document.getElementById('user-avatar').innerText = (currentAuth.username || 'U').slice(0, 1).toUpperCase();
+          document.getElementById('role-badge').innerText = formatRole(currentAuth.roleCode);
+          document.getElementById('tenant-name').innerText = currentAuth.tenantName;
+          document.getElementById('tenant-badge').innerText = currentAuth.tenantType === 'ENTERPRISE' ? '企业租户' : '个人租户';
+
+          const canManage = isManager();
+          document.getElementById('btn-create-ws').style.display = canManage ? 'inline-flex' : 'none';
+
           await loadWorkspaces();
           await loadSubAccountTree();
         }
       } catch (err) {
         console.error('Session exchange error:', err);
-        showToast('SSO 换票异常: ' + err.message, 'error');
+        showToast('会话初始化失败：' + err.message);
       }
     }
 
-    // Load Workspaces
     async function loadWorkspaces() {
       try {
         const resp = await apiFetch('/perm/workspace/list');
         workspaceList = resp.data || [];
 
-        // Populate Selects
         const wsSelect = document.getElementById('ws-select');
-        const subWsSelect = document.getElementById('sub-workspaces');
         wsSelect.innerHTML = '';
-        subWsSelect.innerHTML = '';
-
         workspaceList.forEach(w => {
           const opt = document.createElement('option');
           opt.value = w.workspace_id;
-          opt.innerText = `${w.workspace_name} ${w.is_default ? '(默认)' : ''}`;
-          if (w.is_default || w.workspace_id === currentAuth.defaultWorkspaceId) opt.selected = true;
+          opt.innerText = w.is_default ? `${w.workspace_name} (默认)` : w.workspace_name;
+          if (w.workspace_id === currentAuth.defaultWorkspaceId || (!currentAuth.defaultWorkspaceId && w.is_default)) {
+            opt.selected = true;
+            currentAuth.defaultWorkspaceId = w.workspace_id;
+          }
           wsSelect.appendChild(opt);
-
-          const opt2 = opt.cloneNode(true);
-          subWsSelect.appendChild(opt2);
         });
 
-        // Render Workspace Grid Cards
         renderWorkspaceCards();
+        if (memberList.length > 0) renderMemberTable();
       } catch (e) {
         console.error(e);
+        showToast('加载工作空间失败：' + e.message);
       }
     }
 
     function renderWorkspaceCards() {
       const grid = document.getElementById('ws-cards-grid');
-      grid.innerHTML = '';
-      workspaceList.forEach(w => {
-        const quota = w.quota_config_json || {};
-        const quotaStr = Object.entries(quota).map(([k, v]) => `${k.toUpperCase()}: ${v}`).join(' | ') || '标准配额';
-        const card = document.createElement('div');
-        card.className = `ws-card ${w.is_default ? 'default-ws' : ''}`;
-        card.innerHTML = `
-          <div class="ws-card-header">
-            <div class="ws-name">${w.workspace_name}</div>
-            <span class="badge ${w.is_default ? 'badge-enterprise' : 'badge-personal'}">${w.is_default ? '默认主空间' : '项目空间'}</span>
-          </div>
-          <div class="ws-info-row"><span class="ctx-label">空间ID:</span><span class="ws-info-val">${w.workspace_id}</span></div>
-          <div class="ws-info-row"><span class="ctx-label">K8s Namespace:</span><span class="ws-info-val">${w.k8s_namespace || '-'}</span></div>
-          <div class="ws-info-row"><span class="ctx-label">模型工程项目:</span><span class="ws-info-val">${w.model_project_id || '-'}</span></div>
-          <div class="ws-info-row"><span class="ctx-label">物理配额:</span><span class="ws-info-val">${quotaStr}</span></div>
-          <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-            <button class="btn btn-default btn-sm" onclick="showTicketJumpModal('${w.workspace_id}')">进入底座</button>
+      if (!workspaceList.length) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column: 1 / -1;">暂无工作空间</div>';
+        return;
+      }
+
+      const canManage = isManager();
+      grid.innerHTML = workspaceList.map(w => {
+        const badgeHtml = w.is_default
+          ? '<span class="pill pill-dark">默认空间</span>'
+          : '<span class="pill pill-gray">项目空间</span>';
+        const manageBtn = canManage
+          ? `<button class="btn btn-secondary btn-sm" onclick="openWorkspaceMembersModal('${esc(w.workspace_id)}')">管理用户</button>`
+          : '';
+
+        return `
+          <div class="ws-card">
+            <div>
+              <div class="ws-card-head">
+                <div class="ws-name">${esc(w.workspace_name)}</div>
+                ${badgeHtml}
+              </div>
+              <div class="ws-meta">
+                <div class="ws-meta-row"><span class="ws-meta-key">空间 ID</span><span class="ws-meta-val">${esc(w.workspace_id)}</span></div>
+                <div class="ws-meta-row"><span class="ws-meta-key">授权成员</span><span class="ws-meta-val">${w.member_count || 0} 人</span></div>
+              </div>
+            </div>
+            <div class="ws-card-foot">
+              ${manageBtn}
+              <button class="btn btn-primary btn-sm" onclick="openEnterPlatformModal('${esc(w.workspace_id)}')">进入底座</button>
+            </div>
           </div>
         `;
-        grid.appendChild(card);
-      });
+      }).join('');
     }
 
-    // Load Sub Account Tree
     async function loadSubAccountTree() {
       try {
         const resp = await apiFetch('/uc/sub-account/tree');
         memberList = resp.data || [];
-        const tbody = document.getElementById('member-table-body');
-        tbody.innerHTML = '';
-
-        // Populate parent dropdown in modal
-        const parentSelect = document.getElementById('sub-parent');
-        parentSelect.innerHTML = '<option value="">默认直接挂在主账号下</option>';
-        memberList.forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.user_id;
-          opt.innerText = `[${m.account_type}] ${m.username} (${m.depth_level}级)`;
-          parentSelect.appendChild(opt);
-        });
-
-        if (memberList.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">暂无成员记录</td></tr>';
-          return;
-        }
-
-        memberList.forEach(m => {
-          const tr = document.createElement('tr');
-          const isMaster = m.account_type === 'MASTER';
-          const typeBadge = isMaster
-            ? '<span class="badge badge-master">主账号 MASTER</span>'
-            : '<span class="badge badge-sub">子账号 SUB</span>';
-
-          const roleBadges = (m.roles || ['TENANT_DEVELOPER']).map(r => `<span class="badge badge-role">${r}</span>`).join(' ');
-          const moduleChips = (m.allowed_modules || []).map(mod => `<span style="font-size: 11px; background: #f0f0f0; padding: 2px 5px; border-radius: 4px; margin-right: 4px;">${mod.replace('platform:', '')}</span>`).join('') || '<span style="color: var(--text-muted);">全平台</span>';
-
-          const indent = '&nbsp;'.repeat((m.depth_level - 1) * 6);
-          const icon = isMaster ? '👑 ' : '↳ ';
-
-          tr.innerHTML = `
-            <td><strong>${indent}${icon}${m.username}</strong></td>
-            <td>${typeBadge}</td>
-            <td><code style="font-size: 11px;">${m.tree_path}</code> (层级:${m.depth_level})</td>
-            <td>${m.workspaces ? m.workspaces.join(', ') : '默认空间'}</td>
-            <td>${roleBadges}</td>
-            <td>${moduleChips}</td>
-            <td><span style="color: var(--success); font-weight: 500;">● 正常</span></td>
-            <td>
-              <button class="btn btn-default btn-sm" onclick="showTicketJumpModal()">跳转换票</button>
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
+        renderMemberTable();
       } catch (e) {
         console.error(e);
-        showToast('加载成员列表失败: ' + e.message, 'error');
+        showToast('加载成员列表失败：' + e.message);
       }
     }
 
-    // Modal Triggers
-    function openCreateSubModal() {
-      document.getElementById('sub-username').value = '';
-      document.getElementById('sub-display').value = '';
-      document.getElementById('sub-phone').value = '';
-      openModal('modal-sub');
+    function renderMemberTable() {
+      const tbody = document.getElementById('member-table-body');
+      if (!memberList.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无企业成员记录</td></tr>';
+        return;
+      }
+
+      const canManage = isManager();
+      tbody.innerHTML = memberList.map(m => {
+        const isMaster = m.account_type === 'MASTER';
+        const indentPx = Math.max(0, (m.depth_level - 1) * 18);
+        const branch = isMaster ? '' : '<span class="tree-branch">└</span>';
+        const typePill = isMaster
+          ? '<span class="pill pill-dark">主账号</span>'
+          : '<span class="pill pill-outline">子账号</span>';
+
+        const wsChips = (m.workspaces && m.workspaces.length)
+          ? m.workspaces.map(id => `<span class="pill pill-gray">${esc(getWorkspaceName(id))}</span>`).join('')
+          : '<span class="pill pill-muted">未分配空间</span>';
+
+        const roleChips = (m.roles && m.roles.length)
+          ? m.roles.map(r => `<span class="pill pill-outline">${esc(formatRole(r))}</span>`).join('')
+          : '<span class="pill pill-muted">无角色</span>';
+
+        const mods = m.allowed_modules || [];
+        const modChips = mods.length
+          ? mods.map(mod => `<span class="pill pill-muted">${esc(formatModuleLabel(mod))}</span>`).join('')
+          : '<span class="pill pill-muted">未配置</span>';
+
+        const statusHtml = m.status === 1
+          ? '<span class="status-dot status-active">正常</span>'
+          : '<span class="status-dot status-frozen">已冻结</span>';
+
+        let actionHtml = '<span style="font-size: 12px; color: var(--ink-tertiary);">—</span>';
+        if (isMaster) {
+          actionHtml = '<span style="font-size: 12px; color: var(--ink-tertiary);">主账号</span>';
+        } else if (canManage) {
+          actionHtml = `<button class="btn btn-secondary btn-sm" onclick="openEditSubModal('${esc(m.user_id)}')">编辑权限</button>`;
+        }
+
+        return `
+          <tr>
+            <td>
+              <div class="tree-cell" style="padding-left: ${indentPx}px;">
+                ${branch}
+                <span class="member-name">${esc(m.username)}</span>
+              </div>
+            </td>
+            <td>${typePill}</td>
+            <td><span class="mono-code">L${m.depth_level}</span></td>
+            <td><div class="chip-wrap">${wsChips}</div></td>
+            <td><div class="chip-wrap">${roleChips}</div></td>
+            <td><div class="chip-wrap">${modChips}</div></td>
+            <td>${statusHtml}</td>
+            <td style="text-align: right;">${actionHtml}</td>
+          </tr>
+        `;
+      }).join('');
     }
+
+    /* ---------- Workspace Checkboxes Helper ---------- */
+    function renderWorkspaceCheckboxes(containerId, inputName, selectedIds) {
+      const box = document.getElementById(containerId);
+      const selectedSet = new Set(selectedIds || []);
+      if (!workspaceList.length) {
+        box.innerHTML = '<div style="font-size: 12px; color: var(--ink-tertiary);">暂无可用工作空间</div>';
+        return;
+      }
+      box.innerHTML = workspaceList.map(w => `
+        <label class="check-item">
+          <input type="checkbox" name="${inputName}" value="${esc(w.workspace_id)}" ${selectedSet.has(w.workspace_id) ? 'checked' : ''}>
+          <span>${esc(w.workspace_name)}${w.is_default ? ' (默认)' : ''}</span>
+        </label>
+      `).join('');
+    }
+
+    /* ---------- Edit Sub Account Permissions ---------- */
+    function setEditStatus(val) {
+      editStatusVal = val;
+      document.getElementById('edit-status-1').classList.toggle('active', val === 1);
+      document.getElementById('edit-status-2').classList.toggle('active', val === 2);
+    }
+
+    function selectEditRole(roleCode, elem) {
+      editRoleCode = roleCode;
+      document.querySelectorAll('#edit-role-grid .option-card').forEach(c => c.classList.remove('selected'));
+      if (elem) {
+        elem.classList.add('selected');
+        const radio = elem.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      }
+      document.getElementById('edit-module-box').style.display = roleCode === 'TENANT_DEVELOPER' ? 'block' : 'none';
+    }
+
+    function openEditSubModal(userId) {
+      const member = memberList.find(m => m.user_id === userId);
+      if (!member) return;
+
+      document.getElementById('edit-sub-userid').value = member.user_id;
+      document.getElementById('edit-sub-subtitle').innerText = `${member.username} · ${member.user_id}`;
+      setEditStatus(member.status === 2 ? 2 : 1);
+
+      renderWorkspaceCheckboxes('edit-workspaces-box', 'edit-ws', member.workspaces || []);
+
+      const currentRole = (member.roles && member.roles[0]) || 'TENANT_DEVELOPER';
+      const roleCard = document.querySelector(`#edit-role-grid .option-card[data-role="${currentRole}"]`)
+        || document.querySelector('#edit-role-grid .option-card[data-role="TENANT_DEVELOPER"]');
+      selectEditRole(roleCard ? roleCard.dataset.role : 'TENANT_DEVELOPER', roleCard);
+
+      const currentMods = new Set(member.allowed_modules || []);
+      const hasWildcard = currentMods.has('*') || currentMods.has('all');
+      document.querySelectorAll('input[name="edit-module"]').forEach(cb => {
+        cb.checked = hasWildcard || currentMods.has(cb.value);
+      });
+
+      openModal('modal-edit-sub');
+    }
+
+    async function submitEditSubAccount() {
+      const userId = document.getElementById('edit-sub-userid').value;
+      const workspace_ids = Array.from(document.querySelectorAll('input[name="edit-ws"]:checked')).map(cb => cb.value);
+      const modules = Array.from(document.querySelectorAll('input[name="edit-module"]:checked')).map(cb => cb.value);
+
+      if (!workspace_ids.length) {
+        showToast('请至少保留一个授权工作空间');
+        return;
+      }
+
+      const body = {
+        workspace_ids,
+        role_code: editRoleCode,
+        allowed_modules: editRoleCode === 'TENANT_DEVELOPER' ? modules : ['*'],
+        status: editStatusVal,
+      };
+
+      try {
+        await apiFetch(`/uc/sub-account/${encodeURIComponent(userId)}/permissions`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        showToast('子账号权限已更新');
+        closeModal('modal-edit-sub');
+        await Promise.all([loadSubAccountTree(), loadWorkspaces()]);
+      } catch (e) {
+        showToast('更新失败：' + e.message);
+      }
+    }
+
+    /* ---------- Create Workspace ---------- */
     function openCreateWsModal() {
       document.getElementById('ws-name-input').value = '';
       openModal('modal-ws');
     }
 
-    // Submit Create Sub Account
-    async function submitCreateSubAccount() {
-      const username = document.getElementById('sub-username').value.trim();
-      const password = document.getElementById('sub-password').value.trim();
-      const display_name = document.getElementById('sub-display').value.trim();
-      const phone = document.getElementById('sub-phone').value.trim();
-      const parent_user_id = document.getElementById('sub-parent').value;
-      const ws_id = document.getElementById('sub-workspaces').value;
-
-      if (!username || !password || !display_name) {
-        showToast('请完整填写必填字段', 'error');
-        return;
-      }
-
-      // Collect modules
-      const modules = [];
-      document.querySelectorAll('input[name="module"]:checked').forEach(cb => {
-        modules.push(cb.value);
-      });
-
-      const body = {
-        username,
-        password,
-        display_name,
-        phone,
-        parent_user_id,
-        workspace_ids: [ws_id],
-        role_code: selectedRoleCode,
-        allowed_modules: selectedRoleCode === 'TENANT_DEVELOPER' ? modules : ['*'],
-      };
-
-      try {
-        const resp = await apiFetch('/uc/sub-account/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        showToast('企业子账号创建并授权成功！');
-        closeModal('modal-sub');
-        loadSubAccountTree();
-      } catch (e) {
-        showToast('创建失败: ' + e.message, 'error');
-      }
-    }
-
-    // Submit Create Workspace
     async function submitCreateWorkspace() {
       const name = document.getElementById('ws-name-input').value.trim();
-      const k8s = document.getElementById('ws-k8s-input').value.trim();
-      const model = document.getElementById('ws-model-input').value.trim();
-      const agent = document.getElementById('ws-agent-input').value.trim();
-      const caict = document.getElementById('ws-caict-input').value.trim();
-
       if (!name) {
-        showToast('请输入工作空间名称', 'error');
+        showToast('请输入工作空间名称');
         return;
       }
 
-      const body = {
-        workspace_name: name,
-        k8s_namespace: k8s,
-        model_project_id: model,
-        agent_space_id: agent,
-        caict_workspace_id: caict,
-        quota_config_json: { cpu: '8C', memory: '32G', storage: '100G' },
-      };
+      const body = { workspace_name: name };
 
       try {
         await apiFetch('/perm/workspace/create', {
@@ -968,65 +1264,269 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        showToast('工作空间创建成功！');
+        showToast('工作空间创建成功');
         closeModal('modal-ws');
-        loadWorkspaces();
+        await loadWorkspaces();
       } catch (e) {
-        showToast('空间创建失败: ' + e.message, 'error');
+        showToast('创建失败：' + e.message);
       }
     }
 
-    // Jump Ticket Actions
-    let lastIssuedTicket = '';
-    function showTicketJumpModal(wsId) {
-      if (wsId) document.getElementById('ws-select').value = wsId;
-      document.getElementById('ticket-result-box').style.display = 'none';
-      openModal('modal-jump');
+    /* ---------- Workspace Members Management ---------- */
+    function toggleWsAddModules() {
+      const role = document.getElementById('ws-add-role-select').value;
+      document.getElementById('ws-add-modules-box').style.display = role === 'TENANT_DEVELOPER' ? 'grid' : 'none';
     }
 
-    async function requestJumpTicket() {
-      const platform = document.getElementById('jump-platform').value;
-      const wsId = document.getElementById('ws-select').value || currentAuth.defaultWorkspaceId;
+    async function openWorkspaceMembersModal(wsId) {
+      activeManageWsId = wsId;
+      editingWsMemberUserId = '';
+      const ws = workspaceList.find(w => w.workspace_id === wsId);
+      document.getElementById('ws-members-title').innerText = ws ? `${ws.workspace_name} · 成员管理` : '工作空间成员管理';
+      document.getElementById('ws-members-subtitle').innerText = ws ? `空间 ID：${ws.workspace_id}` : wsId;
+      document.getElementById('ws-add-member-panel').style.display = isManager() ? 'block' : 'none';
+      openModal('modal-ws-members');
+
+      if (!memberList.length) await loadSubAccountTree();
+      await loadWorkspaceMembers(wsId);
+    }
+
+    async function loadWorkspaceMembers(wsId) {
+      const listEl = document.getElementById('ws-members-list');
+      listEl.innerHTML = '<div class="empty-state">正在加载空间成员...</div>';
+      try {
+        const resp = await apiFetch(`/perm/workspace/${encodeURIComponent(wsId)}/members`);
+        activeManageWsMembers = resp.data || [];
+        renderWorkspaceMembersUI();
+      } catch (e) {
+        listEl.innerHTML = `<div class="empty-state">加载失败：${esc(e.message)}</div>`;
+      }
+    }
+
+    function renderWorkspaceMembersUI() {
+      document.getElementById('ws-member-count').innerText = activeManageWsMembers.length;
+
+      // Populate candidate members not yet in this workspace
+      const existingIds = new Set(activeManageWsMembers.map(m => m.user_id));
+      const candidates = memberList.filter(m => !existingIds.has(m.user_id));
+      const userSelect = document.getElementById('ws-add-user-select');
+      const addControls = document.getElementById('ws-add-controls');
+      const emptyHint = document.getElementById('ws-add-empty-hint');
+
+      if (candidates.length) {
+        addControls.style.display = 'block';
+        emptyHint.style.display = 'none';
+        userSelect.innerHTML = candidates.map(c =>
+          `<option value="${esc(c.user_id)}">${esc(c.username)} (${c.account_type === 'MASTER' ? '主账号' : '子账号'})</option>`
+        ).join('');
+        toggleWsAddModules();
+      } else {
+        addControls.style.display = 'none';
+        emptyHint.style.display = 'block';
+      }
+
+      const listEl = document.getElementById('ws-members-list');
+      if (!activeManageWsMembers.length) {
+        listEl.innerHTML = '<div class="empty-state">当前工作空间暂无成员</div>';
+        return;
+      }
+
+      const canManage = isManager();
+      listEl.innerHTML = activeManageWsMembers.map(m => {
+        const isMaster = m.account_type === 'MASTER';
+        const isEditing = editingWsMemberUserId === m.user_id;
+        const typePill = isMaster
+          ? '<span class="pill pill-dark">主账号</span>'
+          : '<span class="pill pill-outline">子账号</span>';
+        const modsText = (m.allowed_modules || []).map(formatModuleLabel).join(' / ') || '未配置';
+
+        let actions = '';
+        if (isMaster) {
+          actions = '<span style="font-size: 12px; color: var(--ink-tertiary);">默认管理员</span>';
+        } else if (canManage) {
+          actions = `
+            <div class="action-bar">
+              <button class="btn btn-secondary btn-sm" onclick="toggleEditWsMember('${esc(m.user_id)}')">${isEditing ? '收起' : '调整权限'}</button>
+              <button class="btn btn-ghost btn-sm" onclick="removeWorkspaceMember('${esc(m.user_id)}', '${esc(m.username)}')">移除</button>
+            </div>
+          `;
+        }
+
+        let editRowHtml = '';
+        if (isEditing && !isMaster && canManage) {
+          const modSet = new Set(m.allowed_modules || []);
+          const hasAll = modSet.has('*') || modSet.has('all');
+          const modChecks = MODULE_OPTIONS.map(opt => `
+            <label class="check-item">
+              <input type="checkbox" name="ws-edit-mod-${esc(m.user_id)}" value="${esc(opt.value)}" ${(hasAll || modSet.has(opt.value)) ? 'checked' : ''}>
+              ${esc(opt.label)}
+            </label>
+          `).join('');
+
+          editRowHtml = `
+            <div class="ws-member-edit">
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <select id="ws-edit-role-${esc(m.user_id)}" class="form-select" style="max-width: 220px;" onchange="onWsInlineRoleChange('${esc(m.user_id)}')">
+                  <option value="TENANT_DEVELOPER" ${m.role_code === 'TENANT_DEVELOPER' ? 'selected' : ''}>研发专家</option>
+                  <option value="TENANT_ADMIN" ${m.role_code === 'TENANT_ADMIN' ? 'selected' : ''}>企业管理员</option>
+                  <option value="TENANT_FINANCE" ${m.role_code === 'TENANT_FINANCE' ? 'selected' : ''}>财务审计</option>
+                  <option value="TENANT_VIEWER" ${m.role_code === 'TENANT_VIEWER' ? 'selected' : ''}>只读访客</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="saveWsMemberEdit('${esc(m.user_id)}')">保存权限</button>
+              </div>
+              <div id="ws-edit-modbox-${esc(m.user_id)}" class="check-panel" style="display: ${m.role_code === 'TENANT_DEVELOPER' ? 'grid' : 'none'};">
+                ${modChecks}
+              </div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="ws-member-item">
+            <div class="ws-member-top">
+              <div class="ws-member-info">
+                <span class="member-name">${esc(m.username)}</span>
+                ${typePill}
+                <span class="pill pill-gray">${esc(formatRole(m.role_code))}</span>
+                <span class="pill pill-muted">${esc(modsText)}</span>
+              </div>
+              ${actions}
+            </div>
+            ${editRowHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function toggleEditWsMember(userId) {
+      editingWsMemberUserId = editingWsMemberUserId === userId ? '' : userId;
+      renderWorkspaceMembersUI();
+    }
+
+    function onWsInlineRoleChange(userId) {
+      const role = document.getElementById(`ws-edit-role-${userId}`).value;
+      const box = document.getElementById(`ws-edit-modbox-${userId}`);
+      if (box) box.style.display = role === 'TENANT_DEVELOPER' ? 'grid' : 'none';
+    }
+
+    async function submitAddWorkspaceMember() {
+      const userId = document.getElementById('ws-add-user-select').value;
+      const roleCode = document.getElementById('ws-add-role-select').value;
+      if (!userId) return;
+
+      const modules = Array.from(document.querySelectorAll('input[name="ws-add-module"]:checked')).map(cb => cb.value);
+      try {
+        await apiFetch(`/perm/workspace/${encodeURIComponent(activeManageWsId)}/members`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            role_code: roleCode,
+            allowed_modules: roleCode === 'TENANT_DEVELOPER' ? modules : ['*'],
+          }),
+        });
+        showToast('已添加成员到工作空间');
+        await Promise.all([loadWorkspaceMembers(activeManageWsId), loadWorkspaces(), loadSubAccountTree()]);
+      } catch (e) {
+        showToast('添加失败：' + e.message);
+      }
+    }
+
+    async function saveWsMemberEdit(userId) {
+      const roleCode = document.getElementById(`ws-edit-role-${userId}`).value;
+      const modules = Array.from(document.querySelectorAll(`input[name="ws-edit-mod-${CSS.escape(userId)}"]:checked`)).map(cb => cb.value);
+      try {
+        await apiFetch(`/perm/workspace/${encodeURIComponent(activeManageWsId)}/members`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            role_code: roleCode,
+            allowed_modules: roleCode === 'TENANT_DEVELOPER' ? modules : ['*'],
+          }),
+        });
+        editingWsMemberUserId = '';
+        showToast('空间成员权限已更新');
+        await Promise.all([loadWorkspaceMembers(activeManageWsId), loadSubAccountTree()]);
+      } catch (e) {
+        showToast('保存失败：' + e.message);
+      }
+    }
+
+    async function removeWorkspaceMember(userId, username) {
+      if (!confirm(`确定将成员「${username}」移出当前工作空间吗？`)) return;
+      try {
+        await apiFetch(`/perm/workspace/${encodeURIComponent(activeManageWsId)}/members/${encodeURIComponent(userId)}`, {
+          method: 'DELETE',
+        });
+        showToast(`已移除成员 ${username}`);
+        await Promise.all([loadWorkspaceMembers(activeManageWsId), loadWorkspaces(), loadSubAccountTree()]);
+      } catch (e) {
+        showToast('移除失败：' + e.message);
+      }
+    }
+
+    /* ---------- Enter Base Platform (Production Silent Ticket Handoff) ---------- */
+    function openEnterPlatformModal(wsId) {
+      activeEnterWsId = wsId;
+      const ws = workspaceList.find(w => w.workspace_id === wsId);
+      document.getElementById('enter-ws-subtitle').innerText = ws
+        ? `当前工作空间：${ws.workspace_name} (${ws.workspace_id})`
+        : `当前工作空间：${wsId}`;
+      const defaultCard = document.querySelector('#platform-grid .option-card[data-platform="MODEL_ENGINE"]');
+      if (defaultCard) selectTargetPlatform('MODEL_ENGINE', defaultCard);
+      openModal('modal-enter-platform');
+    }
+
+    function selectTargetPlatform(code, elem) {
+      selectedPlatform = code;
+      document.querySelectorAll('#platform-grid .option-card').forEach(c => c.classList.remove('selected'));
+      elem.classList.add('selected');
+      const radio = elem.querySelector('input[type="radio"]');
+      if (radio) radio.checked = true;
+    }
+
+    async function confirmEnterPlatform() {
+      const wsId = activeEnterWsId || currentAuth.defaultWorkspaceId;
+      const btn = document.getElementById('btn-confirm-enter');
+      btn.disabled = true;
+      btn.innerText = '正在进入...';
 
       try {
         const resp = await apiFetch('/auth/jump-ticket/issue', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_platform: platform, workspace_id: wsId }),
+          body: JSON.stringify({ target_platform: selectedPlatform, workspace_id: wsId }),
         });
-        lastIssuedTicket = resp.data.jump_ticket;
-        document.getElementById('ticket-val-area').value = lastIssuedTicket;
-        document.getElementById('ticket-result-box').style.display = 'block';
-        showToast('Jump Ticket 签发成功 (60s 有效)');
+
+        currentAuth.defaultWorkspaceId = wsId;
+        const wsSelect = document.getElementById('ws-select');
+        if (wsSelect) wsSelect.value = wsId;
+
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'IAM_ENTER_PLATFORM',
+            workspace_id: wsId,
+            target_platform: selectedPlatform,
+            jump_ticket: resp.data.jump_ticket,
+          }, '*');
+        }
+
+        closeModal('modal-enter-platform');
+        showToast(`已切换至「${getWorkspaceName(wsId)}」，正在进入${PLATFORM_LABELS[selectedPlatform] || selectedPlatform}`);
       } catch (e) {
-        showToast('签发失败: ' + e.message, 'error');
+        showToast('进入失败：' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '确认进入';
       }
     }
 
-    async function simulateSubplatformVerify() {
-      if (!lastIssuedTicket) return;
-      const platform = document.getElementById('jump-platform').value;
-      try {
-        const resp = await apiFetch('/auth/jump-ticket/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jump_ticket: lastIssuedTicket, caller_platform: platform }),
-        });
-        alert(`[核销成功！]\n租户: ${resp.data.tenant_id} (${resp.data.tenant_type})\n用户: ${resp.data.user_id}\n空间: ${resp.data.active_workspace_id}\nK8s命名空间: ${resp.data.k8s_namespace}\n9大网关签名头: 已就绪`);
-        showToast('票据已原子核销！');
-        document.getElementById('ticket-result-box').style.display = 'none';
-      } catch (e) {
-        alert('核销拦截: ' + e.message);
-      }
-    }
-
-    // Workspace change callback
     function onWorkspaceChanged(wsId) {
       currentAuth.defaultWorkspaceId = wsId;
-      showToast('已切换至空间: ' + wsId);
+      showToast('已切换工作空间：' + getWorkspaceName(wsId));
     }
 
-    // Start
     window.addEventListener('DOMContentLoaded', () => {
       initSession();
     });

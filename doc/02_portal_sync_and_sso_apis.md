@@ -40,6 +40,7 @@ sequenceDiagram
 | :--- | :---: | :--- | :--- | :--- |
 | **门户用户静默同步** | `POST` | `/api/v1/sync/user` | 中台 TOKEN / 免密 | 门户注册/登录时双写建档，具有天然幂等性 |
 | **企业认证通过回调** | `POST` | `/api/v1/sync/enterprise-approved`| 中台 TOKEN / 免密 | 门户审核通过企业实名后升级租户与解锁子账号 |
+| **子账号审核通过同步** | `POST` | `/api/v1/sync/sub-account` | 中台 TOKEN / 免密 | 门户子账号申请通过后同步至权限中心与 Casdoor（幂等） |
 | **iframe 免密换票** | `GET` | `/api/v1/sso/exchange-iframe-session`| Portal Token | 供嵌入页面加载时置换内部 JWT 会话凭据 |
 | **子账号登录兜底** | `POST` | `/api/v1/sso/sub-login` | 账号密码 | 门户在本地查无账号时，交由本服务向 Casdoor 验密 |
 | **OIDC 凭证换取/刷新**| `POST` | `/api/v1/sso/oauth/token` | Basic / Client Secret | 标准 OAuth 2.0 授权码换 Token 与 Refresh Token |
@@ -180,6 +181,73 @@ sequenceDiagram
     "tenant_name": "昆山数字智能科技有限公司",
     "cert_level": 2,
     "cert_status": 2
+  }
+}
+```
+
+---
+
+### 3.2.1 门户子账号申请审核通过同步 (`POST /api/v1/sync/sub-account`)
+
+#### 业务说明
+当门户侧发起企业子账号申请并审核通过后，由门户后台回调本接口同步子账号信息（用户中心前端页面不再提供直接新建子账号入口）：
+- 通过 `master_portal_user_id` 或 `tenant_id` 定位所属已实名企业租户；
+- 按 `portal_user_id` 实现强幂等：重复回调不会重复建号，直接返回已有子账号档案；
+- 自动写入物化路径树（`uc_user_profile`）并同步至 Casdoor，同时绑定初始工作空间与角色（未指定工作空间时默认授权至企业默认主空间）；
+- 同步完成后，企业主账号/管理员可在用户中心页面对该子账号的角色、模块白名单、工作空间及状态进行调整。
+
+#### 请求参数
+**Path & Method**: `POST /api/v1/sync/sub-account`  
+**Headers**: `Content-Type: application/json`
+
+| 字段名 | 类型 | 必填 | 默认值 | 示例值 | 说明 |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `portal_user_id` | `string` | 是 | 无 | `"p_sub_9001_01"` | 门户系统该子账号的用户 ID（幂等键与 SSO 映射键） |
+| `master_portal_user_id` | `string` | 条件必填 | `""` | `"p_9001"` | 所属企业主账号在门户的用户 ID（与 `tenant_id` 二选一） |
+| `tenant_id` | `string` | 条件必填 | `""` | `"ten_p_9001"` | 所属企业租户 ID（与 `master_portal_user_id` 二选一） |
+| `parent_portal_user_id` | `string` | 否 | `""` | `""` | 直接上级门户用户 ID（选填，不传默认挂在主账号下） |
+| `username` | `string` | 是 | 无 | `"li_dev_01"` | 子账号登录名 |
+| `display_name` | `string` | 是 | 无 | `"李工"` | 员工姓名 / 显示名 |
+| `phone` | `string` | 否 | `null` | `"13900001111"` | 手机号 |
+| `email` | `string` | 否 | `null` | `"li@sz.ai"` | 邮箱 |
+| `password` | `string` | 否 | `null` | `null` | 初始密码（门户管理密码时可不传） |
+| `workspace_ids` | `string[]` | 否 | `null` | `["ws_default_p_9001"]` | 初始授权工作空间列表（不传默认授权企业默认空间） |
+| `role_code` | `string` | 否 | `"TENANT_DEVELOPER"` | `"TENANT_DEVELOPER"` | 初始标准角色：`TENANT_ADMIN` / `TENANT_DEVELOPER` / `TENANT_FINANCE` / `TENANT_VIEWER` |
+| `allowed_modules` | `string[]` | 否 | `["*"]` | `["platform:model_engine:module:*"]` | 研发模块准入白名单 |
+| `status` | `int` | 否 | `1` | `1` | 账号状态：`1-正常`，`2-冻结` |
+
+#### 请求报文示例
+```json
+{
+  "portal_user_id": "p_sub_9001_01",
+  "master_portal_user_id": "p_9001",
+  "username": "li_dev_01",
+  "display_name": "李工",
+  "phone": "13900001111",
+  "role_code": "TENANT_DEVELOPER"
+}
+```
+
+#### 响应报文示例
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "user_id": "usr_sub_p_sub_9001_01",
+    "portal_user_id": "p_sub_9001_01",
+    "username": "li_dev_01",
+    "display_name": "李工",
+    "tenant_id": "ten_p_9001",
+    "account_type": "SUB",
+    "parent_user_id": "usr_p_9001",
+    "tree_path": "/usr_p_9001/usr_sub_p_sub_9001_01/",
+    "depth_level": 2,
+    "workspaces": ["ws_default_p_9001"],
+    "role_code": "TENANT_DEVELOPER",
+    "allowed_modules": ["*"],
+    "status": 1,
+    "is_new_user": true
   }
 }
 ```

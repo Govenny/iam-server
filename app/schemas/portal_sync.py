@@ -36,6 +36,39 @@ class EnterpriseApprovedResp(BaseModel):
     cert_status: int
 
 
+class PortalSubAccountSyncReq(BaseModel):
+    portal_user_id: str = Field(..., description="门户系统子账号用户ID（用于幂等及SSO映射）")
+    master_portal_user_id: Optional[str] = Field("", description="所属企业主账号在门户的 user_id（与 tenant_id 二选一）")
+    tenant_id: Optional[str] = Field("", description="所属企业租户ID（可选，与 master_portal_user_id 二选一）")
+    parent_portal_user_id: Optional[str] = Field("", description="直接上级在门户的 user_id（选填，默认挂在主账号下）")
+    username: str = Field(..., description="子账号登录名")
+    display_name: str = Field(..., description="子账号显示名/员工姓名")
+    phone: Optional[str] = Field(None, description="手机号")
+    email: Optional[str] = Field(None, description="邮箱")
+    password: Optional[str] = Field(None, description="初始密码（选填，门户管理密码时可留空）")
+    workspace_ids: Optional[List[str]] = Field(None, description="初始授权的工作空间ID列表（不传默认授权企业默认空间）")
+    role_code: str = Field("TENANT_DEVELOPER", description="初始租户标准角色，默认 TENANT_DEVELOPER")
+    allowed_modules: Optional[List[str]] = Field(None, description="研发模块准入白名单，不传默认 ['*']")
+    status: int = Field(1, description="账号状态: 1-正常, 2-冻结")
+
+
+class PortalSubAccountSyncResp(BaseModel):
+    user_id: str
+    portal_user_id: str
+    username: str
+    display_name: str
+    tenant_id: str
+    account_type: str
+    parent_user_id: str
+    tree_path: str
+    depth_level: int
+    workspaces: List[str]
+    role_code: str
+    allowed_modules: List[str]
+    status: int
+    is_new_user: bool
+
+
 class SubLoginReq(BaseModel):
     username: str = Field(..., description="子账号登录名")
     password: str = Field(..., description="密码")

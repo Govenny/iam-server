@@ -538,3 +538,8 @@ CREATE TABLE IF NOT EXISTS `perm_service_subscription_grant` (
 
 1. 执行 `sql/02_phase2_ext.sql`，开发 `api_key.py`、`shadow_grant.py` 及前端 `/ui/apikeys` 页面。
 2. 补充 CLI 测试用例验证 API Key 创建、24 小时双 Key 轮换、高速验权拦截及可信数据流通契约回调。
+
+
+Swagger 交互文档：http://10.214.131.6:8001/docs
+ReDoc 文档页：http://10.214.131.6:8001/redoc
+嵌入管理前端：http://10.214.131.6:8001/ui/members?portal_token=token_p_1794975997

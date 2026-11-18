@@ -1,5 +1,6 @@
 import logging
 import json
+import uuid
 import httpx
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,11 +20,20 @@ from app.schemas.portal_sync import (
     PortalUserSyncResp,
     EnterpriseApprovedReq,
     EnterpriseApprovedResp,
+    PortalSubAccountSyncReq,
+    PortalSubAccountSyncResp,
     SubLoginReq,
     SubLoginResp,
     QueryUserInfoReq,
     QueryUserInfoResp,
 )
+
+VALID_SUB_SYNC_ROLES = {
+    "TENANT_ADMIN",
+    "TENANT_DEVELOPER",
+    "TENANT_FINANCE",
+    "TENANT_VIEWER",
+}
 
 logger = logging.getLogger("iam-service.portal_sync")
 
@@ -225,6 +235,245 @@ def enterprise_approved(req: EnterpriseApprovedReq, db: Session = Depends(get_db
     )
 
 
+@router.post(
+    "/sync/sub-account",
+    response_model=ResponseModel[PortalSubAccountSyncResp],
+    summary="门户子账号申请审核通过同步（幂等）",
+)
+def sync_sub_account(req: PortalSubAccountSyncReq, db: Session = Depends(get_db)):
+    """
+    门户系统在子账号申请审核通过后回调本接口，将子账号同步至权限中心与 Casdoor，
+    写入物化路径树并绑定初始工作空间与角色。支持按 portal_user_id 幂等重试。
+    """
+    if req.role_code not in VALID_SUB_SYNC_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的租户角色编码: {req.role_code}",
+        )
+    if req.status not in (1, 2):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="账号状态仅支持 1(正常) 或 2(冻结)",
+        )
+
+    # 1. 定位所属企业主账号与租户
+    master_profile = None
+    if req.master_portal_user_id and req.master_portal_user_id.strip():
+        master_profile = (
+            db.query(UcUserProfile)
+            .filter(
+                UcUserProfile.portal_user_id == req.master_portal_user_id.strip(),
+                UcUserProfile.is_deleted == 0,
+            )
+            .first()
+        )
+    elif req.tenant_id and req.tenant_id.strip():
+        master_profile = (
+            db.query(UcUserProfile)
+            .filter(
+                UcUserProfile.tenant_id == req.tenant_id.strip(),
+                UcUserProfile.account_type == "MASTER",
+                UcUserProfile.is_deleted == 0,
+            )
+            .first()
+        )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="master_portal_user_id 与 tenant_id 至少需提供一个",
+        )
+
+    if not master_profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到所属企业主账号，请先调用 /api/v1/sync/user 同步企业主账号",
+        )
+
+    tenant = db.query(UcTenant).filter_by(tenant_id=master_profile.tenant_id).first()
+    if not tenant or tenant.tenant_type != "ENTERPRISE" or tenant.cert_level < 2:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="所属租户尚未完成企业实名认证，无法同步企业子账号",
+        )
+
+    # 2. 幂等校验：若门户子账号已同步过则直接返回
+    existing_by_portal = (
+        db.query(UcUserProfile)
+        .filter(
+            UcUserProfile.portal_user_id == req.portal_user_id,
+            UcUserProfile.is_deleted == 0,
+        )
+        .first()
+    )
+    if existing_by_portal:
+        if existing_by_portal.tenant_id != tenant.tenant_id or existing_by_portal.account_type != "SUB":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"门户用户 {req.portal_user_id} 已归属其他租户或为主账号，无法重复同步为当前企业子账号",
+            )
+        if existing_by_portal.status != req.status:
+            existing_by_portal.status = req.status
+            db.commit()
+        bindings = (
+            db.query(PermUserRoleWorkspace)
+            .filter_by(user_id=existing_by_portal.user_id, tenant_id=tenant.tenant_id)
+            .all()
+        )
+        return ResponseModel(
+            data=PortalSubAccountSyncResp(
+                user_id=existing_by_portal.user_id,
+                portal_user_id=existing_by_portal.portal_user_id or req.portal_user_id,
+                username=existing_by_portal.casdoor_user_id,
+                display_name=req.display_name,
+                tenant_id=tenant.tenant_id,
+                account_type=existing_by_portal.account_type,
+                parent_user_id=existing_by_portal.parent_user_id,
+                tree_path=existing_by_portal.tree_path,
+                depth_level=existing_by_portal.depth_level,
+                workspaces=list(dict.fromkeys(b.workspace_id for b in bindings)),
+                role_code=bindings[0].role_code if bindings else req.role_code,
+                allowed_modules=list(dict.fromkeys(m for b in bindings for m in (b.allowed_modules or []))),
+                status=existing_by_portal.status,
+                is_new_user=False,
+            )
+        )
+
+    # 校验用户名唯一性
+    existing_uname = (
+        db.query(UcUserProfile)
+        .filter(
+            (UcUserProfile.casdoor_user_id == req.username)
+            | (UcUserProfile.user_id == req.username),
+            UcUserProfile.is_deleted == 0,
+        )
+        .first()
+    )
+    if existing_uname:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"子账号用户名 '{req.username}' 已被占用",
+        )
+
+    # 3. 确定直接上级与物化路径
+    parent_profile = master_profile
+    if req.parent_portal_user_id and req.parent_portal_user_id.strip():
+        p_key = req.parent_portal_user_id.strip()
+        found_parent = (
+            db.query(UcUserProfile)
+            .filter(
+                (UcUserProfile.portal_user_id == p_key) | (UcUserProfile.user_id == p_key),
+                UcUserProfile.tenant_id == tenant.tenant_id,
+                UcUserProfile.is_deleted == 0,
+            )
+            .first()
+        )
+        if not found_parent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"指定的直接上级账号 {p_key} 不存在或不属于当前企业",
+            )
+        parent_profile = found_parent
+
+    candidate_uid = f"usr_sub_{req.portal_user_id}"
+    if len(candidate_uid) > 64 or db.query(UcUserProfile).filter_by(user_id=candidate_uid).first():
+        candidate_uid = f"usr_sub_{uuid.uuid4().hex[:8]}"
+
+    tree_path = f"{parent_profile.tree_path}{candidate_uid}/"
+    depth_level = parent_profile.depth_level + 1
+
+    # 4. 校验目标工作空间（未指定则自动绑定企业默认空间）
+    if req.workspace_ids:
+        target_ws_ids = list(dict.fromkeys(req.workspace_ids))
+        valid_ws = (
+            db.query(PermTenantWorkspace.workspace_id)
+            .filter(
+                PermTenantWorkspace.tenant_id == tenant.tenant_id,
+                PermTenantWorkspace.workspace_id.in_(target_ws_ids),
+                PermTenantWorkspace.status == 1,
+            )
+            .all()
+        )
+        valid_set = {r[0] for r in valid_ws}
+        invalid_ws = [w for w in target_ws_ids if w not in valid_set]
+        if invalid_ws:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"工作空间不存在或不属于当前企业: {', '.join(invalid_ws)}",
+            )
+    else:
+        default_ws = (
+            db.query(PermTenantWorkspace)
+            .filter_by(tenant_id=tenant.tenant_id, is_default=1, status=1)
+            .first()
+        )
+        target_ws_ids = [default_ws.workspace_id] if default_ws else []
+
+    # 5. 同步至 Casdoor 用户池
+    casdoor_client.create_user(
+        username=req.username,
+        display_name=req.display_name,
+        phone=req.phone or "",
+        email=req.email or "",
+        password=req.password or f"P@{uuid.uuid4().hex[:12]}!",
+    )
+
+    # 6. 写入本地 uc_user_profile 与工作空间权限绑定
+    sub_profile = UcUserProfile(
+        user_id=candidate_uid,
+        portal_user_id=req.portal_user_id,
+        casdoor_user_id=req.username,
+        tenant_id=tenant.tenant_id,
+        account_type="SUB",
+        parent_user_id=parent_profile.user_id,
+        tree_path=tree_path,
+        depth_level=depth_level,
+        quota_share_enabled=1,
+        status=req.status,
+    )
+    db.add(sub_profile)
+    db.flush()
+
+    if req.role_code == "TENANT_DEVELOPER":
+        allowed_modules = req.allowed_modules if req.allowed_modules is not None else ["*"]
+    else:
+        allowed_modules = ["*"]
+
+    for ws_id in target_ws_ids:
+        db.add(
+            PermUserRoleWorkspace(
+                tenant_id=tenant.tenant_id,
+                user_id=candidate_uid,
+                workspace_id=ws_id,
+                role_code=req.role_code,
+                allowed_modules=allowed_modules,
+            )
+        )
+
+    db.commit()
+    logger.info(
+        f"Portal sub-account synced: user_id={candidate_uid}, portal_uid={req.portal_user_id}, tenant={tenant.tenant_id}"
+    )
+
+    return ResponseModel(
+        data=PortalSubAccountSyncResp(
+            user_id=candidate_uid,
+            portal_user_id=req.portal_user_id,
+            username=req.username,
+            display_name=req.display_name,
+            tenant_id=tenant.tenant_id,
+            account_type="SUB",
+            parent_user_id=parent_profile.user_id,
+            tree_path=tree_path,
+            depth_level=depth_level,
+            workspaces=target_ws_ids,
+            role_code=req.role_code,
+            allowed_modules=allowed_modules,
+            status=req.status,
+            is_new_user=True,
+        )
+    )
+
+
 @router.get(
     "/sso/exchange-iframe-session",
     response_model=ResponseModel[Dict[str, Any]],
@@ -282,7 +531,9 @@ def exchange_iframe_session(
     sync_req = PortalUserSyncReq(**user_info)
     sync_resp = sync_user_internal(db, sync_req)
 
-    # 4. Fetch user role
+    # 4. Fetch user profile, tenant & role
+    profile = db.query(UcUserProfile).filter_by(user_id=sync_resp.user_id).first()
+    tenant = db.query(UcTenant).filter_by(tenant_id=sync_resp.tenant_id).first()
     role_binding = (
         db.query(PermUserRoleWorkspace)
         .filter_by(
@@ -291,14 +542,24 @@ def exchange_iframe_session(
         )
         .first()
     )
-    role_code = role_binding.role_code if role_binding else "TENANT_ADMIN"
+    if not role_binding:
+        role_binding = (
+            db.query(PermUserRoleWorkspace)
+            .filter_by(user_id=sync_resp.user_id, tenant_id=sync_resp.tenant_id)
+            .first()
+        )
+    account_type = profile.account_type if profile else "MASTER"
+    default_role = "TENANT_ADMIN" if account_type == "MASTER" else "TENANT_VIEWER"
+    role_code = role_binding.role_code if role_binding else default_role
+    username = profile.casdoor_user_id if profile else sync_resp.user_id
+    tenant_name = tenant.tenant_name if tenant else sync_resp.tenant_id
 
     # 5. Issue internal JWT
     jwt_claims = {
         "user_id": sync_resp.user_id,
         "tenant_id": sync_resp.tenant_id,
         "portal_user_id": sync_req.portal_user_id,
-        "account_type": "MASTER",
+        "account_type": account_type,
         "role_code": role_code,
         "workspace_id": sync_resp.default_workspace_id,
     }
@@ -308,7 +569,10 @@ def exchange_iframe_session(
         data={
             "token": internal_token,
             "user_id": sync_resp.user_id,
+            "username": username,
+            "account_type": account_type,
             "tenant_id": sync_resp.tenant_id,
+            "tenant_name": tenant_name,
             "tenant_type": sync_resp.tenant_type,
             "default_workspace_id": sync_resp.default_workspace_id,
             "role_code": role_code,
