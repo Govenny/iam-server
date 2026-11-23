@@ -1,4 +1,5 @@
 import time
+import json
 import uuid
 import logging
 from typing import Dict, Any, List
@@ -26,6 +27,21 @@ from app.schemas.jump_ticket import (
 )
 
 logger = logging.getLogger("iam-service.jump_ticket")
+
+AUDIT_LOG_KEY = "audit:jump_tickets"
+MAX_AUDIT_LOGS = 200
+
+
+def push_jump_audit_log(entry: Dict[str, Any]) -> None:
+    try:
+        r = get_redis_client()
+        if hasattr(r, "lpush"):
+            r.lpush(AUDIT_LOG_KEY, json.dumps(entry, ensure_ascii=False))
+            if hasattr(r, "ltrim"):
+                r.ltrim(AUDIT_LOG_KEY, 0, MAX_AUDIT_LOGS - 1)
+    except Exception as e:
+        logger.warning(f"Failed to record jump ticket audit: {e}")
+
 
 router = APIRouter(prefix="/auth", tags=["跨平台免密JumpTicket"])
 
@@ -106,6 +122,19 @@ def issue_jump_ticket(
 
     logger.info(f"Jump ticket issued: {ticket_id} for user {ctx.user_id} -> {req.target_platform}")
 
+    push_jump_audit_log({
+        "ticket_id": ticket_id,
+        "user_id": ctx.user_id,
+        "username": ctx.profile.casdoor_user_id if ctx.profile else ctx.user_id,
+        "tenant_id": ctx.tenant_id,
+        "workspace_id": req.workspace_id,
+        "target_platform": req.target_platform,
+        "status": "ISSUED",
+        "issued_at": payload["issued_at"],
+        "verified_at": None,
+        "detail": "票据签发成功 (60s有效)",
+    })
+
     return ResponseModel(
         data=JumpTicketIssueResp(
             jump_ticket=encrypted_ticket,
@@ -157,6 +186,17 @@ def verify_jump_ticket(
 
     if not ticket_state or ticket_state != "UNCONSUMED":
         logger.warning(f"Replay or expired ticket rejected: {ticket_id}")
+        push_jump_audit_log({
+            "ticket_id": ticket_id,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "workspace_id": workspace_id,
+            "target_platform": target_platform,
+            "status": "REPLAY_BLOCKED",
+            "issued_at": payload.get("issued_at", int(time.time())),
+            "verified_at": int(time.time()),
+            "detail": "票据重复核销或已过期被拦截",
+        })
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="票据已失效、已核销或已过期，严禁重复使用",
@@ -164,6 +204,17 @@ def verify_jump_ticket(
 
     # 3. 校验调用方平台一致性
     if target_platform != req.caller_platform:
+        push_jump_audit_log({
+            "ticket_id": ticket_id,
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "workspace_id": workspace_id,
+            "target_platform": target_platform,
+            "status": "PLATFORM_MISMATCH",
+            "issued_at": payload.get("issued_at", int(time.time())),
+            "verified_at": int(time.time()),
+            "detail": f"目标平台不符: 目标为 {target_platform}，调用方为 {req.caller_platform}",
+        })
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"目标平台不符: 票据仅限访问 {target_platform}，当前调用方为 {req.caller_platform}",
@@ -214,6 +265,19 @@ def verify_jump_ticket(
     )
 
     logger.info(f"Jump ticket {ticket_id} verified and consumed successfully for {user_id}")
+
+    push_jump_audit_log({
+        "ticket_id": ticket_id,
+        "user_id": user_id,
+        "username": profile.casdoor_user_id if profile else user_id,
+        "tenant_id": tenant_id,
+        "workspace_id": workspace_id,
+        "target_platform": target_platform,
+        "status": "VERIFIED",
+        "issued_at": payload.get("issued_at", int(time.time())),
+        "verified_at": int(time.time()),
+        "detail": f"原子核销成功，已签发 {req.caller_platform} 网关访问签名",
+    })
 
     return ResponseModel(
         data=JumpTicketContextResp(

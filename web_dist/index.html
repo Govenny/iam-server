@@ -138,6 +138,9 @@
     .pill-gray { background: var(--primary-light); color: var(--primary); }
     .pill-outline { background: var(--bg-surface); color: var(--ink-secondary); border: 1px solid var(--hairline-strong); }
     .pill-muted { background: var(--bg-fill); color: var(--ink-secondary); }
+    .pill-success { background: rgba(47, 210, 155, 0.15); color: #1e825e; }
+    .pill-warning { background: rgba(251, 172, 69, 0.18); color: #b87118; }
+    .pill-danger { background: rgba(251, 112, 75, 0.15); color: #d94e2a; }
 
     /* Main Layout & iOS Segmented Control */
     .app-container {
@@ -276,8 +279,6 @@
     }
     .status-active { color: var(--ink-primary); }
     .status-active::before { background: var(--accent-success); }
-    .status-frozen { color: var(--ink-secondary); }
-    .status-frozen::before { background: var(--accent-warning); }
 
     /* Workspace Cards Grid */
     .ws-grid {
@@ -551,6 +552,113 @@
       to { opacity: 1; transform: translateX(-50%) translateY(0); }
     }
 
+    /* Admin Specific Styles */
+    .view-switcher {
+      display: inline-flex;
+      background: var(--bg-fill);
+      border: 1px solid var(--hairline-strong);
+      padding: 3px;
+      border-radius: var(--radius-ctrl);
+      gap: 3px;
+    }
+    .view-btn {
+      border: none;
+      background: transparent;
+      color: var(--ink-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .view-btn:hover {
+      color: var(--primary);
+    }
+    .view-btn.active {
+      background: var(--primary);
+      color: var(--ink-inverse);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(26, 68, 152, 0.25);
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-card);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-card);
+    }
+    .stat-label { font-size: 12px; font-weight: 500; color: var(--ink-secondary); }
+    .stat-num {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--primary);
+      margin: 6px 0 2px;
+      font-feature-settings: "tnum";
+    }
+    .stat-sub { font-size: 11px; color: var(--ink-tertiary); display: flex; gap: 8px; }
+
+    .health-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .health-pill-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .health-title { font-size: 12px; font-weight: 600; color: var(--ink-primary); }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 12px;
+    }
+    .bar-label { width: 110px; color: var(--ink-secondary); flex-shrink: 0; }
+    .bar-track {
+      flex: 1;
+      height: 8px;
+      background: var(--bg-fill);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 999px;
+      transition: width 0.3s ease;
+    }
+    .bar-val { width: 40px; text-align: right; font-weight: 600; color: var(--ink-primary); }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .filter-input {
+      max-width: 240px;
+      padding: 7px 11px;
+      font-size: 13px;
+    }
+
     @media (max-width: 720px) {
       .form-row-2, .role-grid, .platform-grid, .check-panel, .ws-add-row { grid-template-columns: 1fr; }
       .top-bar { padding: 12px 16px; }
@@ -578,7 +686,11 @@
     </div>
 
     <div class="top-right">
-      <div class="ctx-group">
+      <div id="view-switch-box" class="view-switcher" style="display: none;">
+        <button id="view-btn-admin" class="view-btn active" onclick="switchConsoleView('admin')">平台运营中枢</button>
+        <button id="view-btn-tenant" class="view-btn" onclick="switchConsoleView('tenant')">租户工作台</button>
+      </div>
+      <div id="ctx-ws-group" class="ctx-group">
         <span class="ctx-label">当前空间</span>
         <select id="ws-select" class="ctx-select" onchange="onWorkspaceChanged(this.value)">
           <option value="">加载中...</option>
@@ -594,7 +706,19 @@
 
   <!-- Main Content -->
   <main class="app-container">
-    <div class="toolbar-row">
+    <!-- View 1 Toolbar: Admin Console (5 Tabs) -->
+    <div id="admin-toolbar" class="toolbar-row" style="display: none;">
+      <nav class="segmented" role="tablist">
+        <button class="seg-btn active" onclick="switchAdminTab('dashboard', this)">数据看板</button>
+        <button class="seg-btn" onclick="switchAdminTab('tenants', this)">租户与企业管理</button>
+        <button class="seg-btn" onclick="switchAdminTab('users', this)">全域用户中心</button>
+        <button class="seg-btn" onclick="switchAdminTab('audit', this)">底座免密审计</button>
+        <button class="seg-btn" onclick="switchAdminTab('sync', this)">中台日文件归档</button>
+      </nav>
+    </div>
+
+    <!-- View 2 Toolbar: Tenant Console (2 Tabs) -->
+    <div id="tenant-toolbar" class="toolbar-row">
       <nav class="segmented" role="tablist">
         <button class="seg-btn active" role="tab" onclick="switchTab('members', this)">企业成员与权限</button>
         <button class="seg-btn" role="tab" onclick="switchTab('workspaces', this)">工作空间管理</button>
@@ -626,12 +750,11 @@
               <th>授权工作空间</th>
               <th>标准角色</th>
               <th>准入模块</th>
-              <th>状态</th>
               <th style="text-align: right;">操作</th>
             </tr>
           </thead>
           <tbody id="member-table-body">
-            <tr><td colspan="8" class="empty-state">正在加载成员数据...</td></tr>
+            <tr><td colspan="7" class="empty-state">正在加载成员数据...</td></tr>
           </tbody>
         </table>
       </div>
@@ -656,6 +779,263 @@
         <div id="ws-cards-grid" class="ws-grid"></div>
       </div>
     </section>
+
+    <!-- Admin Tab 1: Dashboard -->
+    <section id="tab-admin-dashboard" class="card" style="display: none;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">平台数据总览看板</div>
+          <div class="card-subtitle">汇聚 Casdoor 认证中枢底座与数智中台全域运营核心指标</div>
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-secondary" onclick="loadAdminDashboard()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            刷新数据
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-label">入驻企业与组织</div>
+            <div id="stat-tenants" class="stat-num">-</div>
+            <div class="stat-sub"><span id="stat-ent-tenants">企业: -</span> · <span id="stat-pending-tenants" style="color: var(--accent-warning);">待审核: -</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">全域注册用户数</div>
+            <div id="stat-users" class="stat-num">-</div>
+            <div class="stat-sub"><span id="stat-master-users">主账号: -</span> · <span id="stat-sub-users">子账号: -</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">纳管项目工作空间</div>
+            <div id="stat-workspaces" class="stat-num">-</div>
+            <div class="stat-sub">物理隔离工程与 K8s 算力池</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">今日底座免密跳传人次</div>
+            <div id="stat-jumps" class="stat-num">-</div>
+            <div class="stat-sub">60s 单次原子核销票据流</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-top: 14px;">
+          <div class="stat-card">
+            <div class="stat-label" style="margin-bottom: 14px;">底座平台访问热度分布 (最近 200 次跳传)</div>
+            <div class="bar-row">
+              <span class="bar-label">模型工程平台</span>
+              <div class="bar-track"><div id="bar-model" class="bar-fill" style="width: 0%;"></div></div>
+              <span id="bar-val-model" class="bar-val">0</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">算力调度平台</span>
+              <div class="bar-track"><div id="bar-compute" class="bar-fill" style="width: 0%;"></div></div>
+              <span id="bar-val-compute" class="bar-val">0</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">Agent 工程沙箱</span>
+              <div class="bar-track"><div id="bar-agent" class="bar-fill" style="width: 0%;"></div></div>
+              <span id="bar-val-agent" class="bar-val">0</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">信通院数据工程</span>
+              <div class="bar-track"><div id="bar-caict" class="bar-fill" style="width: 0%;"></div></div>
+              <span id="bar-val-caict" class="bar-val">0</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label" style="margin-bottom: 12px;">核心底层服务健康监测雷达</div>
+            <div class="health-grid">
+              <div class="health-pill-card">
+                <span class="health-title">MySQL 存储引擎</span>
+                <span id="health-db" class="pill pill-gray">检测中</span>
+              </div>
+              <div class="health-pill-card">
+                <span class="health-title">Redis 票据原子缓存</span>
+                <span id="health-redis" class="pill pill-gray">检测中</span>
+              </div>
+              <div class="health-pill-card">
+                <span class="health-title">Casdoor 认证底座</span>
+                <span id="health-casdoor" class="pill pill-gray">检测中</span>
+              </div>
+              <div class="health-pill-card">
+                <span class="health-title">统一网关签名验签</span>
+                <span id="health-gw" class="pill pill-gray">检测中</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Tab 2: Tenant & Enterprise Management -->
+    <section id="tab-admin-tenants" class="card" style="display: none;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">租户与企业管理</div>
+          <div class="card-subtitle">跨域治理入驻企业认证资质、实名认证审核、免计费白名单穿透与启停状态</div>
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-secondary" onclick="loadAdminTenants()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            刷新
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <input id="admin-tenant-kw" class="form-input filter-input" placeholder="搜索企业名称 / 租户ID" onkeydown="if(event.key==='Enter') loadAdminTenants()">
+          <select id="admin-tenant-type-filter" class="form-select filter-input" style="max-width: 140px;" onchange="loadAdminTenants()">
+            <option value="">全部租户类型</option>
+            <option value="ENTERPRISE">企业租户</option>
+            <option value="INDIVIDUAL">个人开发者</option>
+          </select>
+          <select id="admin-tenant-cert-filter" class="form-select filter-input" style="max-width: 140px;" onchange="loadAdminTenants()">
+            <option value="">全部实名状态</option>
+            <option value="0">未认证</option>
+            <option value="1">待审核</option>
+            <option value="2">已通过</option>
+            <option value="3">已驳回</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadAdminTenants()">查询</button>
+        </div>
+        <div class="table-wrap">
+          <table class="ios-table">
+            <thead>
+              <tr>
+                <th>企业 / 租户名称</th>
+                <th>类型</th>
+                <th>实名认证状态</th>
+                <th>免计费模式</th>
+                <th>账号数</th>
+                <th>空间数</th>
+                <th>创建时间</th>
+                <th style="text-align: right;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="admin-tenant-tbody">
+              <tr><td colspan="8" class="empty-state">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Tab 3: Global Users Management -->
+    <section id="tab-admin-users" class="card" style="display: none;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">全域用户中心</div>
+          <div class="card-subtitle">跨企业检索全量主子账号、配置角色及密码重置维护</div>
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-secondary" onclick="loadAdminUsers()">刷新</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <input id="admin-user-kw" class="form-input filter-input" placeholder="搜索用户名 / 显示名 / 全局UID" onkeydown="if(event.key==='Enter') loadAdminUsers()">
+          <select id="admin-user-type-filter" class="form-select filter-input" style="max-width: 140px;" onchange="loadAdminUsers()">
+            <option value="">全部账号类型</option>
+            <option value="MASTER">企业主账号</option>
+            <option value="SUB">企业子账号</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadAdminUsers()">查询</button>
+        </div>
+        <div class="table-wrap">
+          <table class="ios-table">
+            <thead>
+              <tr>
+                <th>用户名 / 显示名</th>
+                <th>所属租户 / 企业</th>
+                <th>属性</th>
+                <th>角色权限</th>
+                <th>授权空间数</th>
+                <th>注册时间</th>
+                <th style="text-align: right;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="admin-user-tbody">
+              <tr><td colspan="7" class="empty-state">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Tab 4: Jump Ticket & Gateway Audit -->
+    <section id="tab-admin-audit" class="card" style="display: none;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">底座免密跳传与网关验签审计</div>
+          <div class="card-subtitle">监控跨平台单次 Jump Ticket 签发、核销、防重放攻击拦截与网关 HMAC 染色流水</div>
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-secondary" onclick="loadAdminAudit()">刷新流水</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table class="ios-table">
+            <thead>
+              <tr>
+                <th>票据流水号 (Ticket ID)</th>
+                <th>申请用户 / 所属租户</th>
+                <th>目标底座平台</th>
+                <th>目标工作空间</th>
+                <th>核销审计状态</th>
+                <th>时间戳</th>
+                <th>审计结果说明</th>
+              </tr>
+            </thead>
+            <tbody id="admin-audit-tbody">
+              <tr><td colspan="7" class="empty-state">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Tab 5: Data Middle Platform File Sync -->
+    <section id="tab-admin-sync" class="card" style="display: none;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">数智中台离线日文件归档监控</div>
+          <div class="card-subtitle">符合《国家工业中试基地与数智中台 统一接口规范》第 3 章离线对账文件归档服务</div>
+        </div>
+        <div class="action-bar">
+          <button class="btn btn-primary" onclick="triggerExportNow()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            立即执行今日文件生成与归档
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="stat-card">
+            <div class="stat-label">3.2.1 用户信息-日文件 (USER_INFO)</div>
+            <div id="sync-info-file" class="stat-num" style="font-size: 16px; color: var(--ink-primary); margin: 10px 0;">-</div>
+            <div class="ws-meta">
+              <div class="ws-meta-row"><span class="ws-meta-key">规范文件格式</span><span class="ws-meta-val">USER_INFO_{YYYYMMDD}.000</span></div>
+              <div class="ws-meta-row"><span class="ws-meta-key">数据条数</span><span id="sync-info-count" class="ws-meta-val">- 条</span></div>
+              <div class="ws-meta-row"><span class="ws-meta-key">就绪状态</span><span id="sync-info-status" class="ws-meta-val">-</span></div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">3.2.2 用户属性信息-日文件 (USER_ATTR)</div>
+            <div id="sync-attr-file" class="stat-num" style="font-size: 16px; color: var(--ink-primary); margin: 10px 0;">-</div>
+            <div class="ws-meta">
+              <div class="ws-meta-row"><span class="ws-meta-key">规范文件格式</span><span class="ws-meta-val">USER_ATTR_{YYYYMMDD}.000</span></div>
+              <div class="ws-meta-row"><span class="ws-meta-key">属性总行数</span><span id="sync-attr-count" class="ws-meta-val">- 行</span></div>
+              <div class="ws-meta-row"><span class="ws-meta-key">写入机制</span><span class="ws-meta-val">3.6.3 .tmp 原子重命名</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 14px; font-size: 12px; color: var(--ink-tertiary);">
+          归档存储根路径：<code id="sync-dir-path" class="mono-code">-</code>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal 1: Edit Sub Account Permissions -->
@@ -670,13 +1050,6 @@
       </div>
       <div class="modal-body">
         <input type="hidden" id="edit-sub-userid">
-        <div class="form-group">
-          <label class="form-label">账号状态</label>
-          <div class="segmented" style="width: 100%; display: grid; grid-template-columns: 1fr 1fr;">
-            <button type="button" id="edit-status-1" class="seg-btn active" onclick="setEditStatus(1)">正常启用</button>
-            <button type="button" id="edit-status-2" class="seg-btn" onclick="setEditStatus(2)">已冻结</button>
-          </div>
-        </div>
         <div class="form-group">
           <label class="form-label">授权工作空间 (可多选)<span class="req">*</span></label>
           <div id="edit-workspaces-box" class="check-panel"></div>
@@ -850,6 +1223,78 @@
     </div>
   </div>
 
+  <!-- Modal: Admin Tenant Audit & Status -->
+  <div id="modal-admin-tenant" class="modal-overlay" onclick="onOverlayClick(event, 'modal-admin-tenant')">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div id="admin-tmodal-title" class="modal-title">企业租户治理与审核</div>
+          <div id="admin-tmodal-sub" class="modal-sub">-</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-admin-tenant')" aria-label="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="admin-target-tid">
+        <div class="form-group">
+          <label class="form-label">实名认证审核结果</label>
+          <select id="admin-tmodal-cert" class="form-select">
+            <option value="2">审核通过 (认证为 ENTERPRISE 企业实名)</option>
+            <option value="1">保持审核中</option>
+            <option value="3">审核驳回 (不通过)</option>
+            <option value="0">重置为未认证个人游客</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">免计费白名单穿透 (中试演示特权)</label>
+          <select id="admin-tmodal-exempt" class="form-select">
+            <option value="0">正常计费模式</option>
+            <option value="1">免计费白名单 (网关免扣除算力配额)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-admin-tenant')">取消</button>
+        <button class="btn btn-primary" onclick="submitAdminTenantUpdate()">保存配置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Admin User Edit & Password Reset -->
+  <div id="modal-admin-user" class="modal-overlay" onclick="onOverlayClick(event, 'modal-admin-user')">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div id="admin-umodal-title" class="modal-title">全域用户管理</div>
+          <div id="admin-umodal-sub" class="modal-sub">-</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-admin-user')" aria-label="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="admin-target-uid">
+        <div class="form-group">
+          <label class="form-label">分配全局角色</label>
+          <select id="admin-umodal-role" class="form-select">
+            <option value="TENANT_DEVELOPER">研发专家 (TENANT_DEVELOPER)</option>
+            <option value="TENANT_ADMIN">企业管理员 (TENANT_ADMIN)</option>
+            <option value="TENANT_FINANCE">财务审计 (TENANT_FINANCE)</option>
+            <option value="TENANT_VIEWER">只读访客 (TENANT_VIEWER)</option>
+            <option value="PLATFORM_OPERATOR">平台运营专家 (PLATFORM_OPERATOR)</option>
+            <option value="PLATFORM_DEMO">官方演示专家 (PLATFORM_DEMO)</option>
+            <option value="PLATFORM_ADMIN">平台超级管理员 (PLATFORM_ADMIN)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">重置登录密码 (选填，留空则保持原密码)</label>
+          <input id="admin-umodal-pwd" class="form-input" type="password" placeholder="输入新密码同步至 Casdoor">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-admin-user')">取消</button>
+        <button class="btn btn-primary" onclick="submitAdminUserUpdate()">保存并生效</button>
+      </div>
+    </div>
+  </div>
+
   <!-- iOS Floating HUD Toast -->
   <div id="toast" class="toast" role="status" aria-live="polite">
     <span id="toast-text">操作成功</span>
@@ -904,6 +1349,10 @@
     let activeEnterWsId = '';
     let selectedPlatform = 'MODEL_ENGINE';
     let toastTimer = null;
+    let currentConsoleView = 'tenant';
+    let activeAdminTab = 'dashboard';
+    let adminTenantsList = [];
+    let adminUsersList = [];
 
     function esc(str) {
       return String(str == null ? '' : str)
@@ -918,8 +1367,13 @@
       return (
         currentAuth.accountType === 'MASTER' ||
         currentAuth.roleCode === 'TENANT_ADMIN' ||
-        currentAuth.roleCode === 'PLATFORM_ADMIN'
+        currentAuth.roleCode === 'PLATFORM_ADMIN' ||
+        currentAuth.roleCode === 'PLATFORM_OPERATOR'
       );
+    }
+
+    function isPlatformStaff() {
+      return currentAuth.roleCode === 'PLATFORM_ADMIN' || currentAuth.roleCode === 'PLATFORM_OPERATOR';
     }
 
     function formatRole(code) {
@@ -973,7 +1427,7 @@
     function onOverlayClick(e, id) { if (e.target === e.currentTarget) closeModal(id); }
 
     function switchTab(tabName, btnElem) {
-      document.querySelectorAll('.toolbar-row .seg-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#tenant-toolbar .seg-btn').forEach(b => b.classList.remove('active'));
       btnElem.classList.add('active');
       document.getElementById('tab-members').style.display = tabName === 'members' ? 'block' : 'none';
       document.getElementById('tab-workspaces').style.display = tabName === 'workspaces' ? 'block' : 'none';
@@ -981,9 +1435,59 @@
       if (tabName === 'workspaces') loadWorkspaces();
     }
 
+    function switchConsoleView(view) {
+      currentConsoleView = view;
+      try { sessionStorage.setItem('console_preferred_view', view); } catch (e) {}
+      document.getElementById('view-btn-admin').classList.toggle('active', view === 'admin');
+      document.getElementById('view-btn-tenant').classList.toggle('active', view === 'tenant');
+
+      const isAdmin = view === 'admin';
+      document.getElementById('admin-toolbar').style.display = isAdmin ? 'flex' : 'none';
+      document.getElementById('tenant-toolbar').style.display = isAdmin ? 'none' : 'flex';
+      document.getElementById('ctx-ws-group').style.display = isAdmin ? 'none' : 'flex';
+
+      // Hide all tenant tabs
+      document.getElementById('tab-members').style.display = 'none';
+      document.getElementById('tab-workspaces').style.display = 'none';
+
+      // Hide all admin tabs
+      ['dashboard', 'tenants', 'users', 'audit', 'sync'].forEach(t => {
+        const el = document.getElementById(`tab-admin-${t}`);
+        if (el) el.style.display = 'none';
+      });
+
+      if (isAdmin) {
+        const activeBtn = document.querySelector('#admin-toolbar .seg-btn.active') || document.querySelector('#admin-toolbar .seg-btn');
+        switchAdminTab(activeAdminTab || 'dashboard', activeBtn);
+      } else {
+        const activeBtn = document.querySelector('#tenant-toolbar .seg-btn.active') || document.querySelector('#tenant-toolbar .seg-btn');
+        switchTab('members', activeBtn);
+      }
+    }
+
+    function switchAdminTab(tabName, btnElem) {
+      activeAdminTab = tabName;
+      document.querySelectorAll('#admin-toolbar .seg-btn').forEach(b => b.classList.remove('active'));
+      if (btnElem) btnElem.classList.add('active');
+
+      ['dashboard', 'tenants', 'users', 'audit', 'sync'].forEach(t => {
+        const el = document.getElementById(`tab-admin-${t}`);
+        if (el) el.style.display = t === tabName ? 'block' : 'none';
+      });
+
+      if (tabName === 'dashboard') loadAdminDashboard();
+      if (tabName === 'tenants') loadAdminTenants();
+      if (tabName === 'users') loadAdminUsers();
+      if (tabName === 'audit') loadAdminAudit();
+      if (tabName === 'sync') loadAdminSync();
+    }
+
     async function initSession() {
       const urlParams = new URLSearchParams(window.location.search);
-      const portalToken = urlParams.get('portal_token') || 'token_p_9001_zhangsan';
+      const asAdmin = urlParams.get('admin') === '1' || urlParams.get('role') === 'admin';
+      const defaultToken = asAdmin ? 'token_p_admin_ops' : 'token_p_9001_zhangsan';
+      const portalToken = urlParams.get('portal_token') || defaultToken;
+      const requestedView = urlParams.get('view');
 
       try {
         const resp = await fetch(`${API_BASE}/sso/exchange-iframe-session?portal_token=${encodeURIComponent(portalToken)}`);
@@ -1011,8 +1515,26 @@
           const canManage = isManager();
           document.getElementById('btn-create-ws').style.display = canManage ? 'inline-flex' : 'none';
 
-          await loadWorkspaces();
-          await loadSubAccountTree();
+          // Show admin view switcher if platform staff
+          const isStaff = isPlatformStaff();
+          const switcher = document.getElementById('view-switch-box');
+          if (switcher) switcher.style.display = isStaff ? 'inline-flex' : 'none';
+
+          // Determine preferred console view: URL param > sessionStorage > staff default (admin) > tenant
+          let preferredView = requestedView;
+          if (!preferredView) {
+            try { preferredView = sessionStorage.getItem('console_preferred_view'); } catch (e) {}
+          }
+          if (isStaff) {
+            const targetView = (preferredView === 'tenant') ? 'tenant' : 'admin';
+            switchConsoleView(targetView);
+          } else {
+            switchConsoleView('tenant');
+          }
+
+          // Asynchronously load workspace and member lists without blocking view rendering
+          loadWorkspaces();
+          loadSubAccountTree();
         }
       } catch (err) {
         console.error('Session exchange error:', err);
@@ -1123,10 +1645,6 @@
           ? mods.map(mod => `<span class="pill pill-muted">${esc(formatModuleLabel(mod))}</span>`).join('')
           : '<span class="pill pill-muted">未配置</span>';
 
-        const statusHtml = m.status === 1
-          ? '<span class="status-dot status-active">正常</span>'
-          : '<span class="status-dot status-frozen">已冻结</span>';
-
         let actionHtml = '<span style="font-size: 12px; color: var(--ink-tertiary);">—</span>';
         if (isMaster) {
           actionHtml = '<span style="font-size: 12px; color: var(--ink-tertiary);">主账号</span>';
@@ -1147,7 +1665,6 @@
             <td><div class="chip-wrap">${wsChips}</div></td>
             <td><div class="chip-wrap">${roleChips}</div></td>
             <td><div class="chip-wrap">${modChips}</div></td>
-            <td>${statusHtml}</td>
             <td style="text-align: right;">${actionHtml}</td>
           </tr>
         `;
@@ -1171,12 +1688,6 @@
     }
 
     /* ---------- Edit Sub Account Permissions ---------- */
-    function setEditStatus(val) {
-      editStatusVal = val;
-      document.getElementById('edit-status-1').classList.toggle('active', val === 1);
-      document.getElementById('edit-status-2').classList.toggle('active', val === 2);
-    }
-
     function selectEditRole(roleCode, elem) {
       editRoleCode = roleCode;
       document.querySelectorAll('#edit-role-grid .option-card').forEach(c => c.classList.remove('selected'));
@@ -1194,7 +1705,6 @@
 
       document.getElementById('edit-sub-userid').value = member.user_id;
       document.getElementById('edit-sub-subtitle').innerText = `${member.username} · ${member.user_id}`;
-      setEditStatus(member.status === 2 ? 2 : 1);
 
       renderWorkspaceCheckboxes('edit-workspaces-box', 'edit-ws', member.workspaces || []);
 
@@ -1226,7 +1736,6 @@
         workspace_ids,
         role_code: editRoleCode,
         allowed_modules: editRoleCode === 'TENANT_DEVELOPER' ? modules : ['*'],
-        status: editStatusVal,
       };
 
       try {
@@ -1525,6 +2034,356 @@
     function onWorkspaceChanged(wsId) {
       currentAuth.defaultWorkspaceId = wsId;
       showToast('已切换工作空间：' + getWorkspaceName(wsId));
+    }
+
+    /* ---------- Admin Tab 1: Dashboard Logic ---------- */
+    async function loadAdminDashboard() {
+      try {
+        const resp = await apiFetch('/admin/dashboard/stats');
+        const d = resp.data || {};
+
+        document.getElementById('stat-tenants').innerText = d.total_tenants ?? '-';
+        document.getElementById('stat-ent-tenants').innerText = `企业: ${d.enterprise_tenants ?? '-'}`;
+        document.getElementById('stat-pending-tenants').innerText = `待审核: ${d.pending_cert_tenants ?? '-'}`;
+
+        document.getElementById('stat-users').innerText = d.total_users ?? '-';
+        document.getElementById('stat-master-users').innerText = `主账号: ${d.master_users ?? '-'}`;
+        document.getElementById('stat-sub-users').innerText = `子账号: ${d.sub_users ?? '-'}`;
+
+        document.getElementById('stat-workspaces').innerText = d.total_workspaces ?? '-';
+        document.getElementById('stat-jumps').innerText = d.today_ticket_jumps ?? d.today_jump_tickets ?? '-';
+
+        // Platform Jump Heatmap
+        const pj = d.platform_jumps_breakdown || d.platform_jumps || {};
+        const mCount = pj.MODEL_ENGINE || 0;
+        const cCount = pj.COMPUTE || pj.COMPUTE_POWER || 0;
+        const aCount = pj.AGENT || pj.AGENT_SANDBOX || 0;
+        const dCount = pj.CAICT_DATA_ENG || pj.CAICT_DATA || 0;
+        const maxVal = Math.max(1, mCount, cCount, aCount, dCount);
+
+        document.getElementById('bar-val-model').innerText = mCount;
+        document.getElementById('bar-model').style.width = `${Math.round((mCount / maxVal) * 100)}%`;
+
+        document.getElementById('bar-val-compute').innerText = cCount;
+        document.getElementById('bar-compute').style.width = `${Math.round((cCount / maxVal) * 100)}%`;
+
+        document.getElementById('bar-val-agent').innerText = aCount;
+        document.getElementById('bar-agent').style.width = `${Math.round((aCount / maxVal) * 100)}%`;
+
+        document.getElementById('bar-val-caict').innerText = dCount;
+        document.getElementById('bar-caict').style.width = `${Math.round((dCount / maxVal) * 100)}%`;
+
+        // Service Health Radar
+        const sh = d.health_status || d.system_health || {};
+        renderHealthPill('health-db', sh.database || sh.mysql);
+        renderHealthPill('health-redis', sh.redis_ticket_cache || sh.redis);
+        renderHealthPill('health-casdoor', sh.casdoor_idp || sh.casdoor);
+        renderHealthPill('health-gw', sh.gateway_sign_service || sh.gateway_hmac);
+      } catch (e) {
+        showToast('获取看板数据失败：' + e.message);
+      }
+    }
+
+    function renderHealthPill(elemId, status) {
+      const el = document.getElementById(elemId);
+      if (!el) return;
+      el.className = 'pill';
+      if (status === 'UP' || status === 'HEALTHY' || status === 'ENABLED') {
+        el.classList.add('pill-success');
+        el.innerText = '运行正常';
+      } else {
+        el.classList.add('pill-danger');
+        el.innerText = status || '异常告警';
+      }
+    }
+
+    /* ---------- Admin Tab 2: Tenant & Enterprise Management ---------- */
+    let adminTenantList = [];
+
+    async function loadAdminTenants() {
+      const tbody = document.getElementById('admin-tenant-tbody');
+      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">正在检索入驻企业...</td></tr>';
+
+      const kw = (document.getElementById('admin-tenant-kw')?.value || '').trim();
+      const type = document.getElementById('admin-tenant-type-filter')?.value || '';
+      const cert = document.getElementById('admin-tenant-cert-filter')?.value || '';
+
+      const params = new URLSearchParams();
+      if (kw) params.append('keyword', kw);
+      if (type) params.append('tenant_type', type);
+      if (cert) params.append('is_certified', cert);
+
+      try {
+        const resp = await apiFetch(`/admin/tenants?${params.toString()}`);
+        adminTenantList = resp.data || [];
+
+        if (adminTenantList.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="empty-state">未查询到符合条件的企业租户</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = adminTenantList.map(t => {
+          const certStatus = t.cert_status ?? t.is_certified ?? 0;
+          let certPill = '<span class="pill pill-muted">未认证</span>';
+          if (certStatus === 1) certPill = '<span class="pill pill-warning">待审核</span>';
+          else if (certStatus === 2) certPill = '<span class="pill pill-success">已通过</span>';
+          else if (certStatus === 3) certPill = '<span class="pill pill-danger">已驳回</span>';
+
+          const isExempt = (t.is_exempt_billing ?? t.exempt_billing ?? 0) === 1;
+          const exemptPill = isExempt
+            ? '<span class="pill pill-success">免计费白名单</span>'
+            : '<span class="pill pill-muted">标准计费</span>';
+
+          const typeText = t.tenant_type === 'ENTERPRISE' ? '企业租户' : '个人开发者';
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 600; color: var(--ink-pure);">${esc(t.tenant_name || t.tenant_id)}</div>
+                <div class="mono-code" style="margin-top: 3px;">${esc(t.tenant_id)}</div>
+              </td>
+              <td><span class="pill pill-outline">${esc(typeText)}</span></td>
+              <td>${certPill}</td>
+              <td>${exemptPill}</td>
+              <td><span class="pill pill-gray">${t.user_count ?? 0} 成员</span></td>
+              <td><span class="pill pill-gray">${t.workspace_count ?? 0} 空间</span></td>
+              <td style="font-size: 12px; color: var(--ink-tertiary);">${esc((t.created_at || '').slice(0, 19).replace('T', ' '))}</td>
+              <td style="text-align: right;">
+                <button class="btn btn-secondary btn-sm" onclick="openAdminTenantModal('${esc(t.tenant_id)}')">治理审核</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color: var(--accent-danger);">加载失败：${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function openAdminTenantModal(tenantId) {
+      const t = adminTenantList.find(item => item.tenant_id === tenantId);
+      if (!t) return;
+
+      document.getElementById('admin-target-tid').value = t.tenant_id;
+      document.getElementById('admin-tmodal-title').innerText = `企业治理：${t.tenant_name || t.tenant_id}`;
+      document.getElementById('admin-tmodal-sub').innerText = `租户 ID: ${t.tenant_id} · 当前类型: ${t.tenant_type}`;
+
+      document.getElementById('admin-tmodal-cert').value = String(t.cert_status ?? t.is_certified ?? 0);
+      document.getElementById('admin-tmodal-exempt').value = String(t.is_exempt_billing ?? t.exempt_billing ?? 0);
+
+      openModal('modal-admin-tenant');
+    }
+
+    async function submitAdminTenantUpdate() {
+      const tid = document.getElementById('admin-target-tid').value;
+      if (!tid) return;
+
+      const certVal = parseInt(document.getElementById('admin-tmodal-cert').value, 10);
+      const exemptVal = parseInt(document.getElementById('admin-tmodal-exempt').value, 10);
+
+      try {
+        await apiFetch(`/admin/tenants/${encodeURIComponent(tid)}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cert_status: certVal,
+            is_exempt_billing: exemptVal,
+            is_certified: certVal,
+            exempt_billing: exemptVal,
+          }),
+        });
+        showToast('企业租户配置已更新');
+        closeModal('modal-admin-tenant');
+        await loadAdminTenants();
+      } catch (e) {
+        showToast('更新失败：' + e.message);
+      }
+    }
+
+    /* ---------- Admin Tab 3: Global Users Management ---------- */
+    let adminUserList = [];
+
+    async function loadAdminUsers() {
+      const tbody = document.getElementById('admin-user-tbody');
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">正在检索全域账号...</td></tr>';
+
+      const kw = (document.getElementById('admin-user-kw')?.value || '').trim();
+      const type = document.getElementById('admin-user-type-filter')?.value || '';
+
+      const params = new URLSearchParams();
+      if (kw) params.append('keyword', kw);
+      if (type) params.append('account_type', type);
+
+      try {
+        const resp = await apiFetch(`/admin/users?${params.toString()}`);
+        adminUserList = resp.data || [];
+
+        if (adminUserList.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">未查询到符合条件的用户账号</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = adminUserList.map(u => {
+          const typePill = u.account_type === 'MASTER'
+            ? '<span class="pill pill-dark">企业主账号</span>'
+            : '<span class="pill pill-gray">企业子账号</span>';
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 600; color: var(--ink-pure);">${esc(u.display_name || u.username)}</div>
+                <div class="mono-code" style="margin-top: 3px;">UID: ${esc(u.user_id)}</div>
+              </td>
+              <td>
+                <div style="font-weight: 500; color: var(--ink-primary);">${esc(u.tenant_name || u.tenant_id)}</div>
+                <div style="font-size: 11px; color: var(--ink-tertiary);">${esc(u.tenant_id)}</div>
+              </td>
+              <td>${typePill}</td>
+              <td><span class="pill pill-outline">${esc(formatRole(u.role_code))}</span></td>
+              <td><span class="pill pill-gray">${u.workspace_count ?? 0} 空间</span></td>
+              <td style="font-size: 12px; color: var(--ink-tertiary);">${esc((u.created_at || '').slice(0, 19).replace('T', ' '))}</td>
+              <td style="text-align: right;">
+                <button class="btn btn-secondary btn-sm" onclick="openAdminUserModal('${esc(u.user_id)}')">治理维护</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: var(--accent-danger);">加载失败：${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function openAdminUserModal(userId) {
+      const u = adminUserList.find(item => item.user_id === userId);
+      if (!u) return;
+
+      document.getElementById('admin-target-uid').value = u.user_id;
+      document.getElementById('admin-umodal-title').innerText = `用户治理：${u.display_name || u.username}`;
+      document.getElementById('admin-umodal-sub').innerText = `UID: ${u.user_id} · 所属企业: ${u.tenant_name || u.tenant_id}`;
+
+      document.getElementById('admin-umodal-role').value = u.role_code || 'TENANT_DEVELOPER';
+      document.getElementById('admin-umodal-pwd').value = '';
+
+      openModal('modal-admin-user');
+    }
+
+    async function submitAdminUserUpdate() {
+      const uid = document.getElementById('admin-target-uid').value;
+      if (!uid) return;
+
+      const roleVal = document.getElementById('admin-umodal-role').value;
+      const pwdVal = document.getElementById('admin-umodal-pwd').value.trim();
+
+      if (uid === currentAuth.userId && roleVal !== currentAuth.roleCode && !['PLATFORM_ADMIN', 'PLATFORM_OPERATOR'].includes(roleVal)) {
+        if (!confirm('【安全警示】您正在修改当前登录管理员自身的角色为租户角色！\n操作后可能影响您的平台治理特权，确定要继续吗？')) {
+          return;
+        }
+      }
+
+      const payload = {
+        role_code: roleVal,
+      };
+      if (pwdVal) {
+        payload.new_password = pwdVal;
+      }
+
+      try {
+        await apiFetch(`/admin/users/${encodeURIComponent(uid)}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        showToast('全域用户角色配置已更新' + (pwdVal ? '（密码已同步重置）' : ''));
+        closeModal('modal-admin-user');
+        await loadAdminUsers();
+      } catch (e) {
+        showToast('更新失败：' + e.message);
+      }
+    }
+
+    /* ---------- Admin Tab 4: Jump Ticket & Platform Audit ---------- */
+    async function loadAdminAudit() {
+      const tbody = document.getElementById('admin-audit-tbody');
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">正在拉取最新底座跳传流水...</td></tr>';
+
+      try {
+        const resp = await apiFetch('/admin/audit/tickets?limit=100');
+        const list = resp.data || [];
+
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无底座跳传与网关验签流水</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(item => {
+          let statusPill = '<span class="pill pill-muted">未知</span>';
+          if (item.status === 'VERIFIED') statusPill = '<span class="pill pill-success">原子已核销</span>';
+          else if (item.status === 'ISSUED') statusPill = '<span class="pill pill-warning">签发待核销</span>';
+          else if (item.status === 'REPLAY_BLOCKED') statusPill = '<span class="pill pill-danger">防重放拦截</span>';
+          else if (item.status === 'PLATFORM_MISMATCH') statusPill = '<span class="pill pill-danger">平台不符拦截</span>';
+          else if (item.status === 'EXPIRED') statusPill = '<span class="pill pill-muted">已超时失效</span>';
+
+          const platName = PLATFORM_LABELS[item.target_platform] || item.target_platform;
+
+          return `
+            <tr>
+              <td>
+                <span class="mono-code" title="${esc(item.ticket_id)}">${esc((item.ticket_id || '').slice(0, 18))}...</span>
+              </td>
+              <td>
+                <div style="font-weight: 500; color: var(--ink-pure);">${esc(item.username || item.user_id)}</div>
+                <div style="font-size: 11px; color: var(--ink-tertiary);">${esc(item.tenant_id)}</div>
+              </td>
+              <td><span class="pill pill-outline">${esc(platName)}</span></td>
+              <td><span class="mono-code">${esc(item.workspace_id || '-')}</span></td>
+              <td>${statusPill}</td>
+              <td style="font-size: 12px; color: var(--ink-tertiary);">${esc((item.timestamp || '').slice(0, 19).replace('T', ' '))}</td>
+              <td style="font-size: 12px; color: var(--ink-secondary);">${esc(item.detail || '-')}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: var(--accent-danger);">拉取流水失败：${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    /* ---------- Admin Tab 5: Data Middle Platform File Sync ---------- */
+    async function loadAdminSync() {
+      try {
+        const resp = await apiFetch('/admin/sync/files');
+        const d = resp.data || {};
+
+        const infoName = typeof d.user_info_file === 'object' ? (d.user_info_file.name || '') : (d.user_info_file || '');
+        const infoCount = typeof d.user_info_file === 'object' ? (d.user_info_file.row_count ?? 0) : (d.user_info_count ?? 0);
+        const infoReady = typeof d.user_info_file === 'object' ? (d.user_info_file.exists ?? false) : (d.user_info_ready ?? false);
+
+        document.getElementById('sync-info-file').innerText = infoName || 'USER_INFO.000';
+        document.getElementById('sync-info-count').innerText = `${infoCount} 条`;
+        document.getElementById('sync-info-status').innerHTML = infoReady
+          ? '<span class="pill pill-success">已就绪归档</span>'
+          : '<span class="pill pill-muted">未就绪</span>';
+
+        const attrName = typeof d.user_attr_file === 'object' ? (d.user_attr_file.name || '') : (d.user_attr_file || '');
+        const attrCount = typeof d.user_attr_file === 'object' ? (d.user_attr_file.row_count ?? 0) : (d.user_attr_count ?? 0);
+
+        document.getElementById('sync-attr-file').innerText = attrName || 'USER_ATTR.000';
+        document.getElementById('sync-attr-count').innerText = `${attrCount} 行`;
+
+        document.getElementById('sync-dir-path').innerText = d.export_directory || d.storage_dir || '-';
+      } catch (e) {
+        showToast('获取中台归档状态失败：' + e.message);
+      }
+    }
+
+    async function triggerExportNow() {
+      showToast('正在执行中台日文件全量归档...');
+      try {
+        const resp = await apiFetch('/sync/export-data-middle-platform', { method: 'POST' });
+        const d = resp.data || {};
+        showToast(`归档就绪：生成 ${d.user_info_count || 0} 个用户信息，${d.user_attr_count || 0} 个属性`);
+        await loadAdminSync();
+      } catch (e) {
+        showToast('执行归档失败：' + e.message);
+      }
     }
 
     window.addEventListener('DOMContentLoaded', () => {

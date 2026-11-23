@@ -41,7 +41,10 @@ VALID_WORKSPACE_ROLES = {
 
 
 def _is_workspace_manager(ctx: AuthContext) -> bool:
-    return ctx.account_type == "MASTER" or ctx.role_code in ["TENANT_ADMIN", "PLATFORM_ADMIN"]
+    return (
+        ctx.account_type == "MASTER"
+        or ctx.role_code in ["TENANT_ADMIN", "PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    )
 
 
 def _invalidate_workspace_user_cache(tenant_id: str, user_id: str, workspace_id: str) -> None:
@@ -195,15 +198,14 @@ def list_workspace_members(
     db: Session = Depends(get_db),
     ctx: AuthContext = Depends(get_current_context),
 ):
-    ws = (
-        db.query(PermTenantWorkspace)
-        .filter(
-            PermTenantWorkspace.workspace_id == workspace_id,
-            PermTenantWorkspace.tenant_id == ctx.tenant_id,
-            PermTenantWorkspace.status == 1,
-        )
-        .first()
+    is_platform_staff = ctx.role_code in ["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    ws_query = db.query(PermTenantWorkspace).filter(
+        PermTenantWorkspace.workspace_id == workspace_id,
+        PermTenantWorkspace.status == 1,
     )
+    if not is_platform_staff:
+        ws_query = ws_query.filter(PermTenantWorkspace.tenant_id == ctx.tenant_id)
+    ws = ws_query.first()
     if not ws:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -219,7 +221,7 @@ def list_workspace_members(
             & (UcUserProfile.is_deleted == 0),
         )
         .filter(
-            PermUserRoleWorkspace.tenant_id == ctx.tenant_id,
+            PermUserRoleWorkspace.tenant_id == ws.tenant_id,
             PermUserRoleWorkspace.workspace_id == workspace_id,
         )
         .order_by(UcUserProfile.depth_level.asc(), UcUserProfile.id.asc())
@@ -264,26 +266,26 @@ def assign_workspace_member(
             detail="只有主账号或企业管理员有权管理工作空间成员",
         )
 
-    ws = (
-        db.query(PermTenantWorkspace)
-        .filter(
-            PermTenantWorkspace.workspace_id == workspace_id,
-            PermTenantWorkspace.tenant_id == ctx.tenant_id,
-            PermTenantWorkspace.status == 1,
-        )
-        .first()
+    is_platform_staff = ctx.role_code in ["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    ws_query = db.query(PermTenantWorkspace).filter(
+        PermTenantWorkspace.workspace_id == workspace_id,
+        PermTenantWorkspace.status == 1,
     )
+    if not is_platform_staff:
+        ws_query = ws_query.filter(PermTenantWorkspace.tenant_id == ctx.tenant_id)
+    ws = ws_query.first()
     if not ws:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"工作空间 {workspace_id} 不存在或不可用",
         )
+    target_tenant_id = ws.tenant_id
 
     profile = (
         db.query(UcUserProfile)
         .filter(
             UcUserProfile.user_id == req.user_id,
-            UcUserProfile.tenant_id == ctx.tenant_id,
+            UcUserProfile.tenant_id == target_tenant_id,
             UcUserProfile.is_deleted == 0,
         )
         .first()
@@ -312,7 +314,7 @@ def assign_workspace_member(
     old_ws_bindings = (
         db.query(PermUserRoleWorkspace)
         .filter_by(
-            tenant_id=ctx.tenant_id,
+            tenant_id=target_tenant_id,
             user_id=req.user_id,
             workspace_id=workspace_id,
         )
@@ -324,7 +326,7 @@ def assign_workspace_member(
 
     db.add(
         PermUserRoleWorkspace(
-            tenant_id=ctx.tenant_id,
+            tenant_id=target_tenant_id,
             user_id=req.user_id,
             workspace_id=workspace_id,
             role_code=req.role_code,
@@ -332,7 +334,7 @@ def assign_workspace_member(
         )
     )
     db.commit()
-    _invalidate_workspace_user_cache(ctx.tenant_id, req.user_id, workspace_id)
+    _invalidate_workspace_user_cache(target_tenant_id, req.user_id, workspace_id)
     logger.info(
         f"Assigned workspace member: ws={workspace_id}, user={req.user_id}, role={req.role_code}"
     )
@@ -367,26 +369,26 @@ def remove_workspace_member(
             detail="只有主账号或企业管理员有权移除工作空间成员",
         )
 
-    ws = (
-        db.query(PermTenantWorkspace)
-        .filter(
-            PermTenantWorkspace.workspace_id == workspace_id,
-            PermTenantWorkspace.tenant_id == ctx.tenant_id,
-            PermTenantWorkspace.status == 1,
-        )
-        .first()
+    is_platform_staff = ctx.role_code in ["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    ws_query = db.query(PermTenantWorkspace).filter(
+        PermTenantWorkspace.workspace_id == workspace_id,
+        PermTenantWorkspace.status == 1,
     )
+    if not is_platform_staff:
+        ws_query = ws_query.filter(PermTenantWorkspace.tenant_id == ctx.tenant_id)
+    ws = ws_query.first()
     if not ws:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"工作空间 {workspace_id} 不存在或不可用",
         )
+    target_tenant_id = ws.tenant_id
 
     profile = (
         db.query(UcUserProfile)
         .filter(
             UcUserProfile.user_id == user_id,
-            UcUserProfile.tenant_id == ctx.tenant_id,
+            UcUserProfile.tenant_id == target_tenant_id,
             UcUserProfile.is_deleted == 0,
         )
         .first()
@@ -406,14 +408,14 @@ def remove_workspace_member(
     deleted_count = (
         db.query(PermUserRoleWorkspace)
         .filter_by(
-            tenant_id=ctx.tenant_id,
+            tenant_id=target_tenant_id,
             user_id=user_id,
             workspace_id=workspace_id,
         )
         .delete(synchronize_session="fetch")
     )
     db.commit()
-    _invalidate_workspace_user_cache(ctx.tenant_id, user_id, workspace_id)
+    _invalidate_workspace_user_cache(target_tenant_id, user_id, workspace_id)
     logger.info(f"Removed user {user_id} from workspace {workspace_id} (rows={deleted_count})")
 
     return ResponseModel(

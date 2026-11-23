@@ -171,17 +171,15 @@ def run_tests():
                 "platform:model_engine:module:*",
                 "platform:agent:module:*",
             ],
-            "status": 2,
         },
         headers=h_master,
     )
     assert r_edit.status_code == 200, r_edit.text
     edited = r_edit.json()["data"]
     assert set(edited["workspaces"]) == {ws_default, ws_proj}
-    assert edited["status"] == 2
     assert "platform:agent:module:*" in edited["allowed_modules"]
     assert cache_key not in mock_redis.store, "Redis cache should be invalidated on update"
-    print("[PASS] 1. 主账号编辑子账号的工作空间、角色、模块与状态成功，且自动失效缓存")
+    print("[PASS] 1. 主账号编辑子账号的工作空间、角色与模块权限成功，且自动失效缓存")
 
     # 3. Non-admin cannot edit sub-account; master account cannot be edited via sub-account API
     r_forbid = client.put(

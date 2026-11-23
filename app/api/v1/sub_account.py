@@ -35,7 +35,10 @@ KNOWN_PLATFORMS = ("MODEL_ENGINE", "COMPUTE", "AGENT", "CAICT_DATA_ENG")
 
 
 def _is_tenant_manager(ctx: AuthContext) -> bool:
-    return ctx.account_type == "MASTER" or ctx.role_code in ["TENANT_ADMIN", "PLATFORM_ADMIN"]
+    return (
+        ctx.account_type == "MASTER"
+        or ctx.role_code in ["TENANT_ADMIN", "PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    )
 
 
 def _invalidate_user_perm_cache(tenant_id: str, user_id: str, workspace_ids: List[str]) -> None:
@@ -283,20 +286,20 @@ def update_sub_account_permissions(
             detail="只有主账号或企业管理员有权编辑子账号权限",
         )
 
-    profile = (
-        db.query(UcUserProfile)
-        .filter(
-            UcUserProfile.user_id == user_id,
-            UcUserProfile.tenant_id == ctx.tenant_id,
-            UcUserProfile.is_deleted == 0,
-        )
-        .first()
+    is_platform_staff = ctx.role_code in ["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]
+    user_query = db.query(UcUserProfile).filter(
+        UcUserProfile.user_id == user_id,
+        UcUserProfile.is_deleted == 0,
     )
+    if not is_platform_staff:
+        user_query = user_query.filter(UcUserProfile.tenant_id == ctx.tenant_id)
+    profile = user_query.first()
     if not profile:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"未找到当前企业下的用户 {user_id}",
         )
+    target_tenant_id = profile.tenant_id
 
     if profile.account_type == "MASTER":
         raise HTTPException(
@@ -341,13 +344,13 @@ def update_sub_account_permissions(
                 )
             )
 
-    # 校验所有目标工作空间均属于当前租户且活跃
+    # 校验所有目标工作空间均属于目标企业且活跃
     target_ws_ids = [b.workspace_id for b in desired_bindings]
     if target_ws_ids:
         valid_workspaces = (
             db.query(PermTenantWorkspace.workspace_id)
             .filter(
-                PermTenantWorkspace.tenant_id == ctx.tenant_id,
+                PermTenantWorkspace.tenant_id == target_tenant_id,
                 PermTenantWorkspace.workspace_id.in_(target_ws_ids),
                 PermTenantWorkspace.status == 1,
             )
@@ -358,13 +361,13 @@ def update_sub_account_permissions(
         if invalid_ws:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"工作空间不存在或不属于当前企业: {', '.join(invalid_ws)}",
+                detail=f"工作空间不存在或不属于目标企业: {', '.join(invalid_ws)}",
             )
 
     # 查询旧绑定用于缓存失效
     old_bindings = (
         db.query(PermUserRoleWorkspace)
-        .filter_by(tenant_id=ctx.tenant_id, user_id=user_id)
+        .filter_by(tenant_id=target_tenant_id, user_id=user_id)
         .all()
     )
     affected_ws_ids = [b.workspace_id for b in old_bindings] + target_ws_ids
@@ -377,7 +380,7 @@ def update_sub_account_permissions(
     for b in desired_bindings:
         db.add(
             PermUserRoleWorkspace(
-                tenant_id=ctx.tenant_id,
+                tenant_id=target_tenant_id,
                 user_id=user_id,
                 workspace_id=b.workspace_id,
                 role_code=b.role_code,
@@ -385,18 +388,10 @@ def update_sub_account_permissions(
             )
         )
 
-    if req.status is not None:
-        if req.status not in (1, 2):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="账号状态仅支持 1(正常) 或 2(冻结)",
-            )
-        profile.status = req.status
-
     db.commit()
-    _invalidate_user_perm_cache(ctx.tenant_id, user_id, affected_ws_ids)
+    _invalidate_user_perm_cache(target_tenant_id, user_id, affected_ws_ids)
     logger.info(
-        f"Updated sub-account permissions: user_id={user_id}, workspaces={target_ws_ids}, status={profile.status}"
+        f"Updated sub-account permissions: user_id={user_id}, workspaces={target_ws_ids}, tenant={target_tenant_id}"
     )
 
     ws_ids = [b.workspace_id for b in desired_bindings]

@@ -92,14 +92,28 @@ def get_current_context(
 
     if profile:
         tenant = db.query(UcTenant).filter_by(tenant_id=profile.tenant_id).first()
-        # Query role in default workspace
-        binding = (
-            db.query(PermUserRoleWorkspace)
-            .filter_by(user_id=profile.user_id, tenant_id=profile.tenant_id)
-            .first()
-        )
-        if binding:
-            role_code = binding.role_code
+        # 保护平台超级管理员与运营角色：若 Token 中已指定或数据库中存在超管绑定，绝不降级覆盖
+        if role_code in ["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]:
+            pass
+        else:
+            plat_binding = (
+                db.query(PermUserRoleWorkspace)
+                .filter(
+                    PermUserRoleWorkspace.user_id == profile.user_id,
+                    PermUserRoleWorkspace.role_code.in_(["PLATFORM_ADMIN", "PLATFORM_OPERATOR"]),
+                )
+                .first()
+            )
+            if plat_binding:
+                role_code = plat_binding.role_code
+            else:
+                binding = (
+                    db.query(PermUserRoleWorkspace)
+                    .filter_by(user_id=profile.user_id, tenant_id=profile.tenant_id)
+                    .first()
+                )
+                if binding:
+                    role_code = binding.role_code
 
     if not user_id or not tenant_id:
         raise HTTPException(

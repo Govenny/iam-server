@@ -58,6 +58,15 @@ def sync_user_internal(db: Session, req: PortalUserSyncReq) -> PortalUserSyncRes
     if profile:
         # Existing user - fetch tenant and default workspace
         tenant = db.query(UcTenant).filter_by(tenant_id=profile.tenant_id).first()
+        if req.is_platform_admin and tenant:
+            # 自动修复平台管理员历史残留的个人租户与空间名称
+            if tenant.tenant_type != "ENTERPRISE" or "个人空间" in (tenant.tenant_name or ""):
+                tenant.tenant_type = "ENTERPRISE"
+                tenant.tenant_name = req.company_name or "数智中台运营中心"
+                tenant.cert_status = 2
+                tenant.is_exempt_billing = 1
+                db.commit()
+
         ws = (
             db.query(PermTenantWorkspace)
             .filter_by(tenant_id=profile.tenant_id, is_default=1)
@@ -67,7 +76,7 @@ def sync_user_internal(db: Session, req: PortalUserSyncReq) -> PortalUserSyncRes
         return PortalUserSyncResp(
             user_id=profile.user_id,
             tenant_id=profile.tenant_id,
-            tenant_type=tenant.tenant_type if tenant else "PERSONAL",
+            tenant_type=tenant.tenant_type if tenant else "ENTERPRISE",
             default_workspace_id=ws_id,
             is_new_user=False,
         )
@@ -503,6 +512,7 @@ def exchange_iframe_session(
             logger.warning(f"Failed to query portal userinfo with token: {e}")
 
     # 2. Mock / Dev Fallback: parse token string or extract identity
+    is_admin = False
     if not user_info:
         # Support token format like "token_p_1001_zhangsan" or raw id
         clean_token = portal_token.replace("Bearer ", "").strip()
@@ -517,15 +527,18 @@ def exchange_iframe_session(
             portal_uid = clean_token[:32]
             uname = f"user_{clean_token[:8]}"
 
+        is_admin = ("admin" in clean_token.lower() or "operator" in clean_token.lower())
         user_info = {
             "portal_user_id": portal_uid,
             "username": uname,
-            "display_name": f"用户_{uname}",
+            "display_name": f"平台管理员_{uname}" if is_admin else f"用户_{uname}",
             "phone": "13800000000",
-            "is_platform_admin": False,
-            "is_enterprise": False,
-            "company_name": "",
+            "is_platform_admin": is_admin,
+            "is_enterprise": True,
+            "company_name": "数智中台运营中心" if is_admin else f"企业_{uname}",
         }
+    else:
+        is_admin = bool(user_info.get("is_platform_admin") or "admin" in str(user_info.get("username", "")).lower())
 
     # 3. JIT Lazy loading synchronization
     sync_req = PortalUserSyncReq(**user_info)
@@ -551,8 +564,27 @@ def exchange_iframe_session(
     account_type = profile.account_type if profile else "MASTER"
     default_role = "TENANT_ADMIN" if account_type == "MASTER" else "TENANT_VIEWER"
     role_code = role_binding.role_code if role_binding else default_role
+
+    # 平台超管/运营自动纠偏与自愈保障：若为平台管理员，强制平台角色并纠偏历史被改乱的数据
+    is_staff_user = bool(is_admin or (sync_req and sync_req.is_platform_admin))
+    if is_staff_user:
+        role_code = "PLATFORM_ADMIN"
+        if role_binding and role_binding.role_code != "PLATFORM_ADMIN":
+            role_binding.role_code = "PLATFORM_ADMIN"
+            role_binding.allowed_modules = ["*"]
+            db.commit()
+        if tenant and (tenant.tenant_type != "ENTERPRISE" or "个人空间" in (tenant.tenant_name or "")):
+            tenant.tenant_type = "ENTERPRISE"
+            tenant.tenant_name = "数智中台运营中心"
+            tenant.cert_status = 2
+            tenant.is_exempt_billing = 1
+            db.commit()
+            tenant_name = tenant.tenant_name
+        else:
+            tenant_name = tenant.tenant_name if tenant else "数智中台运营中心"
+    else:
+        tenant_name = tenant.tenant_name if tenant else sync_resp.tenant_id
     username = profile.casdoor_user_id if profile else sync_resp.user_id
-    tenant_name = tenant.tenant_name if tenant else sync_resp.tenant_id
 
     # 5. Issue internal JWT
     jwt_claims = {
