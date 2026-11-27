@@ -7,3 +7,8 @@ __pycache__/
 *.tar.gz
 iam-service.tar.gz
 
+# Offline Python wheels (keep directory placeholder)
+wheels/**/*.whl
+wheels/**/*.tar.gz
+!wheels/.gitkeep
+

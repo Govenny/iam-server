@@ -31,6 +31,19 @@ PLATFORM_PREFIX_MAP = {
     "AGENT": "platform:agent:",
     "CAICT_DATA_ENG": "platform:caict_data:",
 }
+
+
+def filter_modules_for_platform(modules_raw: List[str], platform_code: Optional[str] = None) -> List[str]:
+    """根据目标平台编码裁剪模块准入白名单，未传平台编码则返回完整清单。"""
+    raw = modules_raw or []
+    if "*" in raw or "all" in raw:
+        return ["*"]
+    if not platform_code:
+        return list(raw)
+    prefix = PLATFORM_PREFIX_MAP.get(platform_code.upper(), "")
+    if not prefix:
+        return list(raw)
+    return [m for m in raw if m.startswith(prefix) or m.startswith("platform:common:")]
 VALID_WORKSPACE_ROLES = {
     "TENANT_ADMIN",
     "TENANT_DEVELOPER",
@@ -482,17 +495,7 @@ def get_user_modules_and_roles(
             )
     else:
         role_code = binding.role_code
-        modules_raw = binding.allowed_modules or []
-
-        # 平台模块前缀裁剪过滤
-        prefix = PLATFORM_PREFIX_MAP.get(platform_code.upper(), "")
-        if "*" in modules_raw or "all" in modules_raw:
-            filtered_modules = ["*"]
-        else:
-            filtered_modules = [
-                m for m in modules_raw
-                if not prefix or m.startswith(prefix) or m.startswith("platform:common:")
-            ]
+        filtered_modules = filter_modules_for_platform(binding.allowed_modules or [], platform_code)
 
         resp_data = ModulesAndRolesResp(
             user_id=ctx.user_id,

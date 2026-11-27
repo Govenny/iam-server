@@ -58,7 +58,8 @@ def _invalidate_user_perm_cache(tenant_id: str, user_id: str, workspace_ids: Lis
 @router.post(
     "/sub-account/create",
     response_model=ResponseModel[SubAccountCreateResp],
-    summary="创建企业子账号（写入物化路径树）",
+    summary="[已收敛] 创建企业子账号（内部测试/兼容接口，页面入口已关闭，由门户审核后同步）",
+    deprecated=True,
 )
 def create_sub_account(
     req: SubAccountCreateReq,
@@ -66,8 +67,9 @@ def create_sub_account(
     ctx: AuthContext = Depends(get_current_context),
 ):
     """
-    企业主账号在当前租户下创建子账号。
-    前置校验：操作人必须具备 TENANT_ADMIN / PLATFORM_ADMIN 权限，且所属租户必须为 ENTERPRISE。
+    [内部兼容接口]
+    注意：当前用户权限中心管理界面不开放直接新建子账号入口。
+    生产环境下所有子账号由企业在对外运营服务平台提报审批后，调用 POST /api/v1/sync/sub-account 统一同步建档。
     """
     # 1. 权限与租户前置校验
     tenant = ctx.tenant or db.query(UcTenant).filter_by(tenant_id=ctx.tenant_id).first()

@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.casdoor_client import casdoor_client
-from app.core.security import create_internal_jwt
+from app.core.portal_client import portal_client
+from app.core.security import create_internal_jwt, generate_gateway_headers
+from app.api.v1.workspace_perm import filter_modules_for_platform
 from app.models.tenant import UcTenant
 from app.models.user_profile import UcUserProfile
 from app.models.workspace import PermTenantWorkspace
@@ -26,6 +28,9 @@ from app.schemas.portal_sync import (
     SubLoginResp,
     QueryUserInfoReq,
     QueryUserInfoResp,
+    PortalUserPermContextReq,
+    AuthorizedWorkspacePermItem,
+    PortalUserPermContextResp,
 )
 
 VALID_SUB_SYNC_ROLES = {
@@ -483,39 +488,109 @@ def sync_sub_account(req: PortalSubAccountSyncReq, db: Session = Depends(get_db)
     )
 
 
+def _map_portal_sso_user(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """将门户 /api/sso/validateTicket 或目录同步返回字段映射为 PortalUserSyncReq 参数。"""
+    portal_uid = str(raw.get("userId") or raw.get("portal_user_id") or raw.get("userName") or "")
+    uname = str(raw.get("userName") or raw.get("username") or portal_uid)
+    dname = str(raw.get("name") or raw.get("displayName") or raw.get("display_name") or uname)
+    phone = raw.get("phone") or raw.get("mobile") or ""
+    email = raw.get("email") or ""
+    company_id = str(raw.get("companyId") or raw.get("companyCode") or "").strip()
+    company_name = str(raw.get("companyName") or raw.get("company_name") or "").strip()
+    role_name = str(raw.get("roleName") or "").strip()
+
+    is_admin = bool(
+        raw.get("is_platform_admin")
+        or any(k in role_name for k in ("平台", "超级管理员", "超管"))
+        or (role_name == "管理员" and company_name in ("门户", "数智中台运营中心", ""))
+        or uname.lower() == "admin"
+    )
+    is_ent = bool(is_admin or company_id or company_name)
+    return {
+        "portal_user_id": portal_uid,
+        "username": uname,
+        "display_name": dname,
+        "phone": str(phone) if phone is not None else "",
+        "email": str(email) if email is not None else "",
+        "is_platform_admin": is_admin,
+        "is_enterprise": is_ent,
+        "company_name": "数智中台运营中心" if (is_admin and company_name in ("", "门户")) else company_name,
+    }
+
+
 @router.get(
     "/sso/exchange-iframe-session",
     response_model=ResponseModel[Dict[str, Any]],
-    summary="iframe 嵌入页面免密换票",
+    summary="iframe 嵌入页面免密换票（支持门户 sessionId 两步换票）",
 )
 def exchange_iframe_session(
-    portal_token: str = Query(..., description="门户当前登录用户的 Token"),
+    sessionId: Optional[str] = Query(None, description="门户跳转携带的 sessionId（优先）"),
+    portal_token: Optional[str] = Query(None, description="门户登录 Token 或开发调试凭证"),
+    clientId: Optional[str] = Query(None, description="可选覆盖门户分配的子平台 clientId"),
     db: Session = Depends(get_db),
 ):
     """
-    供 8001/ui/* 前端页面加载时调用。
-    拿着 portal_token 反查门户信息或解析后，自动执行 JIT 懒加载兜底建档，签发 8001 内部访问 JWT。
+    供 8001/ui/* 前端页面加载时调用：
+    1. 若已配置 PORTAL_SSO_BASE_URL（且非本地 token_p_ 调试凭证），按《门户-身份体系接口文档》执行标准两步换票：
+       GET /api/sso/login (sessionId -> 20s ticket) -> GET /api/sso/validateTicket (ticket -> 用户与企业信息)；
+    2. 若门户返回 ticket 为 null（未登录），返回 HTTP 401 并携带门户统一登录页地址 login_url；
+    3. 支持兼容单步 PORTAL_USERINFO_URL 或本地 Mock 凭证；
+    4. 内部自动执行 JIT 懒加载同步并签发 8001 内部访问 JWT。
     """
-    user_info = None
+    credential = (sessionId or portal_token or "").strip()
+    if not credential and not portal_client.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少门户会话参数 sessionId 或 portal_token",
+        )
 
-    # 1. If PORTAL_USERINFO_URL is configured, query portal
-    if settings.PORTAL_USERINFO_URL:
+    user_info: Optional[Dict[str, Any]] = None
+    portal_auth_token = ""
+    redirect_url = ""
+    is_dev_mock_token = credential.startswith("token_p_")
+
+    # 1. 标准两步门户认证协议 (/api/sso/login -> /api/sso/validateTicket)
+    if portal_client.is_configured() and not is_dev_mock_token:
+        try:
+            sso_res = portal_client.exchange_session_for_user(credential, client_id=clientId)
+        except Exception as e:
+            logger.error(f"Portal SSO 2-step exchange error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"调用门户统一认证服务异常: {e}",
+            )
+
+        if not sso_res.get("authenticated") or not sso_res.get("user"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "message": "门户未登录或 sessionId 已失效，请先在门户完成登录",
+                    "login_url": sso_res.get("login_url") or settings.PORTAL_LOGIN_URL,
+                },
+            )
+
+        raw_user = sso_res["user"]
+        portal_auth_token = str(raw_user.get("token") or "")
+        redirect_url = str(raw_user.get("redirectUrl") or "")
+        user_info = _map_portal_sso_user(raw_user)
+
+    # 2. 兼容单步 PORTAL_USERINFO_URL 配置
+    if not user_info and settings.PORTAL_USERINFO_URL and not is_dev_mock_token:
         try:
             with httpx.Client(timeout=5.0) as client:
                 res = client.get(
                     settings.PORTAL_USERINFO_URL,
-                    headers={"Authorization": f"Bearer {portal_token}"},
+                    headers={"Authorization": f"Bearer {credential}"},
                 )
                 if res.status_code == 200:
                     user_info = res.json()
         except Exception as e:
             logger.warning(f"Failed to query portal userinfo with token: {e}")
 
-    # 2. Mock / Dev Fallback: parse token string or extract identity
+    # 3. Mock / Dev Fallback: 本地调试模式解析 token_p_xxx / p_xxx
     is_admin = False
     if not user_info:
-        # Support token format like "token_p_1001_zhangsan" or raw id
-        clean_token = portal_token.replace("Bearer ", "").strip()
+        clean_token = credential.replace("Bearer ", "").strip()
         parts = clean_token.split("_")
         if len(parts) >= 3 and parts[0] == "token":
             portal_uid = f"{parts[1]}_{parts[2]}"
@@ -540,11 +615,11 @@ def exchange_iframe_session(
     else:
         is_admin = bool(user_info.get("is_platform_admin") or "admin" in str(user_info.get("username", "")).lower())
 
-    # 3. JIT Lazy loading synchronization
+    # 4. JIT Lazy loading synchronization
     sync_req = PortalUserSyncReq(**user_info)
     sync_resp = sync_user_internal(db, sync_req)
 
-    # 4. Fetch user profile, tenant & role
+    # 5. Fetch user profile, tenant & role
     profile = db.query(UcUserProfile).filter_by(user_id=sync_resp.user_id).first()
     tenant = db.query(UcTenant).filter_by(tenant_id=sync_resp.tenant_id).first()
     role_binding = (
@@ -586,7 +661,7 @@ def exchange_iframe_session(
         tenant_name = tenant.tenant_name if tenant else sync_resp.tenant_id
     username = profile.casdoor_user_id if profile else sync_resp.user_id
 
-    # 5. Issue internal JWT
+    # 6. Issue internal JWT
     jwt_claims = {
         "user_id": sync_resp.user_id,
         "tenant_id": sync_resp.tenant_id,
@@ -597,18 +672,88 @@ def exchange_iframe_session(
     }
     internal_token = create_internal_jwt(jwt_claims, expires_in=86400)
 
+    resp_data: Dict[str, Any] = {
+        "token": internal_token,
+        "user_id": sync_resp.user_id,
+        "username": username,
+        "account_type": account_type,
+        "tenant_id": sync_resp.tenant_id,
+        "tenant_name": tenant_name,
+        "tenant_type": sync_resp.tenant_type,
+        "default_workspace_id": sync_resp.default_workspace_id,
+        "role_code": role_code,
+        "expires_in": 86400,
+    }
+    if portal_auth_token:
+        resp_data["portal_token"] = portal_auth_token
+    if redirect_url:
+        resp_data["redirect_url"] = redirect_url
+
+    return ResponseModel(data=resp_data)
+
+
+@router.post(
+    "/sync/pull-from-portal",
+    response_model=ResponseModel[Dict[str, Any]],
+    summary="从门户全量拉取用户与企业目录并同步入库",
+)
+def pull_directory_from_portal(
+    client_id: Optional[str] = Query(None, description="可选覆盖 clientId"),
+    db: Session = Depends(get_db),
+):
+    """
+    主动调用门户《身份体系接口文档》的 4、5 号目录接口：
+    - GET /api/company/listAuthCompanyList
+    - GET /api/user/listUserInfoList
+    校验 authentication = MD5(clientId + 4c4a1c7d52) 后幂等同步入库。
+    """
+    if not portal_client.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置 PORTAL_SSO_BASE_URL，无法连接门户拉取目录",
+        )
+
+    companies = portal_client.list_auth_companies(client_id=client_id)
+    users = portal_client.list_user_info(client_id=client_id)
+
+    synced_companies = 0
+    for c in companies:
+        code = str(c.get("companyCode") or "").strip()
+        name = str(c.get("companyName") or "").strip()
+        if not code:
+            continue
+        tenant = db.query(UcTenant).filter(
+            (UcTenant.tenant_code == code) | (UcTenant.tenant_id == f"ten_ent_{code}")
+        ).first()
+        if not tenant:
+            tenant = UcTenant(
+                tenant_id=f"ten_ent_{code}",
+                tenant_type="ENTERPRISE",
+                org_name=f"org_{code}",
+                tenant_code=code,
+                tenant_name=name or code,
+                cert_level=2,
+                cert_status=2,
+            )
+            db.add(tenant)
+            synced_companies += 1
+    db.commit()
+
+    synced_users = 0
+    for u in users:
+        mapped = _map_portal_sso_user(u)
+        if not mapped["portal_user_id"]:
+            continue
+        sync_resp = sync_user_internal(db, PortalUserSyncReq(**mapped))
+        if sync_resp.is_new_user:
+            synced_users += 1
+
     return ResponseModel(
         data={
-            "token": internal_token,
-            "user_id": sync_resp.user_id,
-            "username": username,
-            "account_type": account_type,
-            "tenant_id": sync_resp.tenant_id,
-            "tenant_name": tenant_name,
-            "tenant_type": sync_resp.tenant_type,
-            "default_workspace_id": sync_resp.default_workspace_id,
-            "role_code": role_code,
-            "expires_in": 86400,
+            "fetched_companies": len(companies),
+            "new_companies_synced": synced_companies,
+            "fetched_users": len(users),
+            "new_users_synced": synced_users,
         }
     )
 
@@ -616,12 +761,15 @@ def exchange_iframe_session(
 @router.post(
     "/sso/sub-login",
     response_model=ResponseModel[SubLoginResp],
-    summary="企业子账号登录门户兜底接口",
+    summary="[已废弃] 企业子账号登录门户兜底接口（子账号已统一由门户注册与认证，无需透传验密）",
+    deprecated=True,
 )
 def sub_login(req: SubLoginReq, db: Session = Depends(get_db)):
     """
-    供门户登录接口在本地查不到账号时调用。
-    向 Casdoor 校验密码后，返回子账号的完整租户、角色及空间信息。
+    [已废弃通道]
+    注意：当前业务架构已明确子账号全生命周期收敛于门户端（申请、审核、密码设置及登录鉴权）。
+    门户本地原生拥有子账号数据，不存在“本地查无账号透传给用户中心验密登录”的逻辑。
+    本接口仅作向前兼容保留，新对接方严禁调用。
     """
     # 1. Check user profile in uc_user_profile
     profile = (
@@ -814,4 +962,215 @@ def export_data_middle_platform(
         "export_directory": out_dir,
     }
     return ResponseModel(data=result_data, api_name="exportDataMiddlePlatform")
+
+
+def _resolve_master_user_id(profile: UcUserProfile) -> str:
+    """从物化路径或上级标识解析所属企业主账号 user_id。"""
+    if profile.account_type != "SUB":
+        return profile.user_id
+    segments = [s for s in (profile.tree_path or "").split("/") if s]
+    if segments:
+        return segments[0]
+    return profile.parent_user_id or profile.user_id
+
+
+def _build_portal_perm_context(
+    db: Session,
+    target_portal_uid: str,
+    target_uid: str,
+    workspace_id: Optional[str],
+    target_platform: Optional[str],
+) -> PortalUserPermContextResp:
+    """聚合查询用户租户、主子溯源、空间权限与网关签名头（供门户核销 Ticket 时调用）。"""
+    if not target_portal_uid and not target_uid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少用户标识参数 (portal_user_id 或 user_id)",
+        )
+
+    query = db.query(UcUserProfile).filter(UcUserProfile.is_deleted == 0)
+    if target_portal_uid and target_uid:
+        profile = query.filter(
+            (UcUserProfile.portal_user_id == target_portal_uid)
+            | (UcUserProfile.user_id == target_uid)
+        ).first()
+    elif target_portal_uid:
+        profile = query.filter(UcUserProfile.portal_user_id == target_portal_uid).first()
+    else:
+        profile = query.filter(UcUserProfile.user_id == target_uid).first()
+
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"未找到对应的用户档案 (portal_user_id={target_portal_uid}, user_id={target_uid})",
+        )
+
+    tenant = db.query(UcTenant).filter_by(tenant_id=profile.tenant_id, is_deleted=0).first()
+    tenant_name = tenant.tenant_name if tenant else profile.tenant_id
+    tenant_type = tenant.tenant_type if tenant else "PERSONAL"
+    cert_level = tenant.cert_level if tenant else 0
+    master_user_id = _resolve_master_user_id(profile)
+
+    # 查询租户下所有有效空间与该用户的全部权限绑定
+    workspaces = (
+        db.query(PermTenantWorkspace)
+        .filter_by(tenant_id=profile.tenant_id, status=1)
+        .order_by(PermTenantWorkspace.is_default.desc(), PermTenantWorkspace.id.asc())
+        .all()
+    )
+    ws_map = {w.workspace_id: w for w in workspaces}
+
+    bindings = (
+        db.query(PermUserRoleWorkspace)
+        .filter_by(tenant_id=profile.tenant_id, user_id=profile.user_id)
+        .all()
+    )
+    binding_map: Dict[str, List[PermUserRoleWorkspace]] = {}
+    is_platform_staff = False
+    for b in bindings:
+        binding_map.setdefault(b.workspace_id, []).append(b)
+        if b.role_code in ("PLATFORM_ADMIN", "PLATFORM_OPERATOR"):
+            is_platform_staff = True
+
+    authorized_list: List[AuthorizedWorkspacePermItem] = []
+    for w in workspaces:
+        w_bindings = binding_map.get(w.workspace_id, [])
+        if not w_bindings and not is_platform_staff:
+            continue
+        if w_bindings:
+            role = w_bindings[0].role_code
+            mods_raw = list({m for b in w_bindings for m in (b.allowed_modules or [])})
+            mods = filter_modules_for_platform(mods_raw, target_platform)
+        else:
+            role = "PLATFORM_ADMIN"
+            mods = ["*"]
+
+        authorized_list.append(
+            AuthorizedWorkspacePermItem(
+                workspace_id=w.workspace_id,
+                workspace_name=w.workspace_name,
+                is_default=bool(w.is_default),
+                k8s_namespace=w.k8s_namespace or "",
+                role_code=role,
+                allowed_modules=mods,
+            )
+        )
+
+    # 选定当前激活空间
+    active_item: Optional[AuthorizedWorkspacePermItem] = None
+    if workspace_id:
+        active_item = next((item for item in authorized_list if item.workspace_id == workspace_id), None)
+        if not active_item:
+            if is_platform_staff and workspace_id in ws_map:
+                w_obj = ws_map[workspace_id]
+                active_item = AuthorizedWorkspacePermItem(
+                    workspace_id=w_obj.workspace_id,
+                    workspace_name=w_obj.workspace_name,
+                    is_default=bool(w_obj.is_default),
+                    k8s_namespace=w_obj.k8s_namespace or "",
+                    role_code="PLATFORM_ADMIN",
+                    allowed_modules=["*"],
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"用户无权访问工作空间 {workspace_id}",
+                )
+    else:
+        active_item = next((item for item in authorized_list if item.is_default), None)
+        if not active_item and authorized_list:
+            active_item = authorized_list[0]
+
+    if active_item:
+        active_ws_id = active_item.workspace_id
+        active_ws_name = active_item.workspace_name
+        k8s_ns = active_item.k8s_namespace
+        primary_role = active_item.role_code
+        active_mods = active_item.allowed_modules
+        w_bindings = binding_map.get(active_ws_id, [])
+        roles = list(dict.fromkeys(b.role_code for b in w_bindings)) if w_bindings else [primary_role]
+    else:
+        # 兜底（无任何空间绑定时）
+        active_ws_id = ""
+        active_ws_name = ""
+        k8s_ns = ""
+        primary_role = "PLATFORM_ADMIN" if is_platform_staff else ("TENANT_ADMIN" if profile.account_type == "MASTER" else "TENANT_VIEWER")
+        roles = [primary_role]
+        active_mods = ["*"] if is_platform_staff or profile.account_type == "MASTER" else []
+
+    has_access = True
+    if target_platform and primary_role == "TENANT_DEVELOPER" and len(active_mods) == 0:
+        has_access = False
+
+    gw_headers = generate_gateway_headers(
+        tenant_id=profile.tenant_id,
+        user_id=profile.user_id,
+        master_user_id=master_user_id,
+        workspace_id=active_ws_id,
+        role_code=primary_role,
+        shadow_account="",
+    )
+
+    return PortalUserPermContextResp(
+        user_id=profile.user_id,
+        portal_user_id=profile.portal_user_id,
+        username=profile.casdoor_user_id,
+        master_user_id=master_user_id,
+        account_type=profile.account_type,
+        tenant_id=profile.tenant_id,
+        tenant_name=tenant_name,
+        tenant_type=tenant_type,
+        cert_level=cert_level,
+        active_workspace_id=active_ws_id,
+        active_workspace_name=active_ws_name,
+        k8s_namespace=k8s_ns,
+        role_code=primary_role,
+        roles=roles,
+        allowed_modules=active_mods,
+        has_platform_access=has_access,
+        authorized_workspaces=authorized_list,
+        gateway_headers=gw_headers,
+    )
+
+
+@router.get(
+    "/sync/user-perm-context",
+    response_model=ResponseModel[PortalUserPermContextResp],
+    summary="门户核销聚合查询用户全量权限上下文 (GET)",
+)
+def get_user_perm_context(
+    portal_user_id: Optional[str] = Query(None, description="门户系统用户ID（与 user_id 二选一）"),
+    user_id: Optional[str] = Query(None, description="用户中心全局用户ID（与 portal_user_id 二选一）"),
+    workspace_id: Optional[str] = Query(None, description="目标工作空间ID（选填，不传取默认空间）"),
+    target_platform: Optional[str] = Query(None, description="目标平台编码（选填，传则按平台裁剪模块白名单）"),
+    db: Session = Depends(get_db),
+):
+    """
+    供对外运营服务平台（门户）在沿用自身 Ticket 核销时调用：
+    传入 portal_user_id，一次性获取租户、主子账号、角色、模块白名单及全部授权工作空间列表，
+    由门户合并进原有核销 JSON 返回给子平台，子平台无需重改核销接口地址。
+    """
+    data = _build_portal_perm_context(db, portal_user_id or "", user_id or "", workspace_id, target_platform)
+    return ResponseModel(data=data, api_name="getUserPermContext")
+
+
+@router.post(
+    "/sync/user-perm-context",
+    response_model=ResponseModel[PortalUserPermContextResp],
+    summary="门户核销聚合查询用户全量权限上下文 (POST / 兼容中台报文)",
+)
+def post_user_perm_context(
+    req: PortalUserPermContextReq,
+    db: Session = Depends(get_db),
+):
+    """POST 模式支持门户以 JSON Body 或中台标准 SYS_HEAD/SYS_BODY 报文查询用户权限上下文。"""
+    data = _build_portal_perm_context(
+        db,
+        req.portal_user_id or "",
+        req.user_id or "",
+        req.workspace_id,
+        req.target_platform,
+    )
+    return ResponseModel(data=data, api_name="getUserPermContext")
+
 

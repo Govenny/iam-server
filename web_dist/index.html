@@ -659,6 +659,12 @@
       font-size: 13px;
     }
 
+    /* Embedded iframe anti-nesting mode */
+    body.is-embedded .top-bar { display: none; }
+    body.is-embedded .app-container { margin: 16px auto 32px; }
+    .toolbar-row[data-hidden="1"],
+    .seg-btn[data-hidden="1"] { display: none !important; }
+
     @media (max-width: 720px) {
       .form-row-2, .role-grid, .platform-grid, .check-panel, .ws-add-row { grid-template-columns: 1fr; }
       .top-bar { padding: 12px 16px; }
@@ -709,19 +715,19 @@
     <!-- View 1 Toolbar: Admin Console (5 Tabs) -->
     <div id="admin-toolbar" class="toolbar-row" style="display: none;">
       <nav class="segmented" role="tablist">
-        <button class="seg-btn active" onclick="switchAdminTab('dashboard', this)">数据看板</button>
-        <button class="seg-btn" onclick="switchAdminTab('tenants', this)">租户与企业管理</button>
-        <button class="seg-btn" onclick="switchAdminTab('users', this)">全域用户中心</button>
-        <button class="seg-btn" onclick="switchAdminTab('audit', this)">底座免密审计</button>
-        <button class="seg-btn" onclick="switchAdminTab('sync', this)">中台日文件归档</button>
+        <button class="seg-btn active" data-tab="dashboard" onclick="switchAdminTab('dashboard', this)">数据看板</button>
+        <button class="seg-btn" data-tab="tenants" onclick="switchAdminTab('tenants', this)">租户与企业管理</button>
+        <button class="seg-btn" data-tab="users" onclick="switchAdminTab('users', this)">全域用户中心</button>
+        <button class="seg-btn" data-tab="audit" onclick="switchAdminTab('audit', this)">底座免密审计</button>
+        <button class="seg-btn" data-tab="sync" onclick="switchAdminTab('sync', this)">中台日文件归档</button>
       </nav>
     </div>
 
     <!-- View 2 Toolbar: Tenant Console (2 Tabs) -->
     <div id="tenant-toolbar" class="toolbar-row">
       <nav class="segmented" role="tablist">
-        <button class="seg-btn active" role="tab" onclick="switchTab('members', this)">企业成员与权限</button>
-        <button class="seg-btn" role="tab" onclick="switchTab('workspaces', this)">工作空间管理</button>
+        <button class="seg-btn active" role="tab" data-tab="members" onclick="switchTab('members', this)">企业成员与权限</button>
+        <button class="seg-btn" role="tab" data-tab="workspaces" onclick="switchTab('workspaces', this)">工作空间管理</button>
       </nav>
     </div>
 
@@ -730,7 +736,7 @@
       <div class="card-header">
         <div>
           <div class="card-title">企业成员与角色树</div>
-          <div class="card-subtitle">管理企业主账号与下属子账号的工作空间授权、角色及模块准入范围</div>
+          <div class="card-subtitle">管理企业主账号与下属子账号的工作空间授权、角色及模块准入范围（子账号在门户申请审核通过后自动同步至此，本控制台提供空间与角色治理）</div>
         </div>
         <div class="action-bar">
           <button class="btn btn-secondary" onclick="loadSubAccountTree()">
@@ -1350,9 +1356,89 @@
     let selectedPlatform = 'MODEL_ENGINE';
     let toastTimer = null;
     let currentConsoleView = 'tenant';
+    let activeTenantTab = 'members';
     let activeAdminTab = 'dashboard';
     let adminTenantsList = [];
     let adminUsersList = [];
+
+    function parseRouteIntent() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawPath = (window.location.pathname || '').replace(/\/+$/, '');
+      const uiMatch = rawPath.match(/\/ui(?:\/(.*))?$/);
+      const subpath = uiMatch && uiMatch[1] ? uiMatch[1].toLowerCase() : '';
+
+      const pathRouteMap = {
+        'members':         { view: 'tenant', tab: 'members',   scope: 'single' },
+        'workspaces':      { view: 'tenant', tab: 'workspaces', scope: 'single' },
+        'admin':           { view: 'admin',  tab: 'dashboard', scope: 'all' },
+        'admin/dashboard': { view: 'admin',  tab: 'dashboard', scope: 'audit_group' },
+        'admin/tenants':   { view: 'admin',  tab: 'tenants',   scope: 'users_group' },
+        'admin/users':     { view: 'admin',  tab: 'users',     scope: 'users_group' },
+        'admin/audit':     { view: 'admin',  tab: 'audit',     scope: 'audit_group' },
+        'admin/sync':      { view: 'admin',  tab: 'sync',      scope: 'audit_group' }
+      };
+
+      const route = pathRouteMap[subpath] || null;
+      const requestedView = (urlParams.get('view') || '').toLowerCase();
+      const requestedTab = (urlParams.get('tab') || '').toLowerCase();
+      const embedParam = (urlParams.get('embed') || '').toLowerCase();
+      const adminTabs = ['dashboard', 'tenants', 'users', 'audit', 'sync'];
+      const tenantTabs = ['members', 'workspaces'];
+
+      let targetView = route ? route.view : (requestedView === 'admin' || requestedView === 'tenant' ? requestedView : '');
+      let targetTab = route ? route.tab : '';
+      const scope = route ? route.scope : 'all';
+
+      if (requestedTab) {
+        if (adminTabs.includes(requestedTab)) {
+          targetView = targetView || 'admin';
+          targetTab = requestedTab;
+        } else if (tenantTabs.includes(requestedTab)) {
+          targetView = targetView || 'tenant';
+          targetTab = requestedTab;
+        }
+      }
+      if (requestedView === 'admin' || requestedView === 'tenant') {
+        targetView = requestedView;
+      }
+
+      let isInIframe = false;
+      try { isInIframe = window.self !== window.top; } catch (e) { isInIframe = true; }
+
+      let isEmbedded = false;
+      if (embedParam === '0' || embedParam === 'false') {
+        isEmbedded = false;
+      } else if (embedParam === '1' || embedParam === 'true') {
+        isEmbedded = true;
+      } else {
+        isEmbedded = Boolean(subpath) || isInIframe;
+      }
+
+      return { subpath, targetView, targetTab, scope, isEmbedded, showTabs: urlParams.get('show_tabs') === '1' };
+    }
+
+    function applyEmbedLayout(routeIntent, actualView) {
+      document.body.classList.toggle('is-embedded', !!routeIntent.isEmbedded);
+
+      // Tenant subpath in embed mode: hide duplicate 2-tab toolbar unless explicitly kept
+      const tenantToolbar = document.getElementById('tenant-toolbar');
+      if (tenantToolbar) {
+        const hideTenantToolbar = routeIntent.isEmbedded && routeIntent.scope === 'single' && !routeIntent.showTabs && actualView === 'tenant';
+        tenantToolbar.setAttribute('data-hidden', hideTenantToolbar ? '1' : '0');
+      }
+
+      // Admin scoped menus in embed mode: split cleanly into user governance vs audit/dashboard groups
+      const groupTabsMap = {
+        users_group: ['tenants', 'users'],
+        audit_group: ['dashboard', 'audit', 'sync']
+      };
+      const visibleTabs = (routeIntent.isEmbedded && groupTabsMap[routeIntent.scope]) || null;
+      document.querySelectorAll('#admin-toolbar .seg-btn').forEach(btn => {
+        const tabKey = btn.getAttribute('data-tab');
+        const hidden = visibleTabs ? !visibleTabs.includes(tabKey) : false;
+        btn.setAttribute('data-hidden', hidden ? '1' : '0');
+      });
+    }
 
     function esc(str) {
       return String(str == null ? '' : str)
@@ -1426,16 +1512,23 @@
     function closeModal(id) { document.getElementById(id).classList.remove('active'); }
     function onOverlayClick(e, id) { if (e.target === e.currentTarget) closeModal(id); }
 
+    function findTabButton(toolbarId, tabName) {
+      return document.querySelector(`#${toolbarId} .seg-btn[data-tab="${tabName}"]`) ||
+             document.querySelector(`#${toolbarId} .seg-btn`);
+    }
+
     function switchTab(tabName, btnElem) {
+      activeTenantTab = tabName;
+      const targetBtn = btnElem || findTabButton('tenant-toolbar', tabName);
       document.querySelectorAll('#tenant-toolbar .seg-btn').forEach(b => b.classList.remove('active'));
-      btnElem.classList.add('active');
+      if (targetBtn) targetBtn.classList.add('active');
       document.getElementById('tab-members').style.display = tabName === 'members' ? 'block' : 'none';
       document.getElementById('tab-workspaces').style.display = tabName === 'workspaces' ? 'block' : 'none';
       if (tabName === 'members') loadSubAccountTree();
       if (tabName === 'workspaces') loadWorkspaces();
     }
 
-    function switchConsoleView(view) {
+    function switchConsoleView(view, targetTab) {
       currentConsoleView = view;
       try { sessionStorage.setItem('console_preferred_view', view); } catch (e) {}
       document.getElementById('view-btn-admin').classList.toggle('active', view === 'admin');
@@ -1457,18 +1550,19 @@
       });
 
       if (isAdmin) {
-        const activeBtn = document.querySelector('#admin-toolbar .seg-btn.active') || document.querySelector('#admin-toolbar .seg-btn');
-        switchAdminTab(activeAdminTab || 'dashboard', activeBtn);
+        const nextAdminTab = targetTab || activeAdminTab || 'dashboard';
+        switchAdminTab(nextAdminTab, findTabButton('admin-toolbar', nextAdminTab));
       } else {
-        const activeBtn = document.querySelector('#tenant-toolbar .seg-btn.active') || document.querySelector('#tenant-toolbar .seg-btn');
-        switchTab('members', activeBtn);
+        const nextTenantTab = targetTab || activeTenantTab || 'members';
+        switchTab(nextTenantTab, findTabButton('tenant-toolbar', nextTenantTab));
       }
     }
 
     function switchAdminTab(tabName, btnElem) {
       activeAdminTab = tabName;
+      const targetBtn = btnElem || findTabButton('admin-toolbar', tabName);
       document.querySelectorAll('#admin-toolbar .seg-btn').forEach(b => b.classList.remove('active'));
-      if (btnElem) btnElem.classList.add('active');
+      if (targetBtn) targetBtn.classList.add('active');
 
       ['dashboard', 'tenants', 'users', 'audit', 'sync'].forEach(t => {
         const el = document.getElementById(`tab-admin-${t}`);
@@ -1486,12 +1580,31 @@
       const urlParams = new URLSearchParams(window.location.search);
       const asAdmin = urlParams.get('admin') === '1' || urlParams.get('role') === 'admin';
       const defaultToken = asAdmin ? 'token_p_admin_ops' : 'token_p_9001_zhangsan';
-      const portalToken = urlParams.get('portal_token') || defaultToken;
+      const sessionIdParam = urlParams.get('sessionId') || urlParams.get('sessionid');
+      const portalTokenParam = urlParams.get('portal_token');
+      const clientIdParam = urlParams.get('clientId');
       const requestedView = urlParams.get('view');
 
+      const query = new URLSearchParams();
+      if (sessionIdParam) {
+        query.set('sessionId', sessionIdParam);
+      } else {
+        query.set('portal_token', portalTokenParam || defaultToken);
+      }
+      if (clientIdParam) query.set('clientId', clientIdParam);
+
       try {
-        const resp = await fetch(`${API_BASE}/sso/exchange-iframe-session?portal_token=${encodeURIComponent(portalToken)}`);
+        const resp = await fetch(`${API_BASE}/sso/exchange-iframe-session?${query.toString()}`);
         const json = await resp.json();
+        if (resp.status === 401) {
+          const detail = json.detail || {};
+          const loginUrl = detail.login_url || '';
+          showToast(detail.message || '门户登录态已失效，请重新登录');
+          if (loginUrl && window.top === window.self) {
+            setTimeout(() => { window.location.href = loginUrl; }, 1200);
+          }
+          return;
+        }
         if (json.code === 200 && json.data) {
           const d = json.data;
           currentAuth = {
@@ -1520,21 +1633,40 @@
           const switcher = document.getElementById('view-switch-box');
           if (switcher) switcher.style.display = isStaff ? 'inline-flex' : 'none';
 
-          // Determine preferred console view: URL param > sessionStorage > staff default (admin) > tenant
-          let preferredView = requestedView;
+          // Determine preferred console view: URL subpath/query > sessionStorage > staff default (admin) > tenant
+          const routeIntent = parseRouteIntent();
+          let preferredView = routeIntent.targetView || requestedView;
           if (!preferredView) {
             try { preferredView = sessionStorage.getItem('console_preferred_view'); } catch (e) {}
           }
+
+          let actualView = 'tenant';
+          let initialTab = 'members';
           if (isStaff) {
-            const targetView = (preferredView === 'tenant') ? 'tenant' : 'admin';
-            switchConsoleView(targetView);
+            actualView = (preferredView === 'tenant') ? 'tenant' : 'admin';
+            if (actualView === 'admin') {
+              initialTab = ['dashboard', 'tenants', 'users', 'audit', 'sync'].includes(routeIntent.targetTab)
+                ? routeIntent.targetTab
+                : 'dashboard';
+            } else {
+              initialTab = ['members', 'workspaces'].includes(routeIntent.targetTab)
+                ? routeIntent.targetTab
+                : 'members';
+            }
           } else {
-            switchConsoleView('tenant');
+            actualView = 'tenant';
+            initialTab = ['members', 'workspaces'].includes(routeIntent.targetTab)
+              ? routeIntent.targetTab
+              : 'members';
           }
 
-          // Asynchronously load workspace and member lists without blocking view rendering
-          loadWorkspaces();
-          loadSubAccountTree();
+          applyEmbedLayout(routeIntent, actualView);
+          switchConsoleView(actualView, initialTab);
+
+          // Keep workspace dropdown populated when entering on members/admin view
+          if (!(actualView === 'tenant' && initialTab === 'workspaces')) {
+            loadWorkspaces();
+          }
         }
       } catch (err) {
         console.error('Session exchange error:', err);

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Platform = "linux/arm64"
 )
 
@@ -12,17 +12,24 @@ Write-Host "==========================================================" -Foregro
 Write-Host ">>> [1/3] 构建 Python 3.12 镜像 (架构: $Platform): ${ImageName}:${ImageTag} ..." -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# 优先使用 buildx 进行跨架构编译并加载至本地镜像库
+$env:DOCKER_BUILDKIT = "1"
+
+# 优先使用本地 docker builder（支持 arm64 与 BuildKit 缓存且兼容中文目录）
 $buildSuccess = $false
-try {
-    docker buildx build --platform $Platform -t "${ImageName}:${ImageTag}" --load .
+docker buildx build --builder desktop-linux --platform $Platform -t "${ImageName}:${ImageTag}" --load .
+if ($LASTEXITCODE -eq 0) {
     $buildSuccess = $true
-} catch {
-    Write-Host "docker buildx 执行失败或未配置，尝试常规 docker build --platform ..." -ForegroundColor Yellow
+} else {
+    Write-Host "desktop-linux builder 未就绪，尝试默认 buildx / docker build ..." -ForegroundColor Yellow
+    docker buildx build --platform $Platform -t "${ImageName}:${ImageTag}" --load .
+    if ($LASTEXITCODE -eq 0) {
+        $buildSuccess = $true
+    }
 }
 
 if (-not $buildSuccess) {
     docker build --platform $Platform -t "${ImageName}:${ImageTag}" .
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
 Write-Host ""

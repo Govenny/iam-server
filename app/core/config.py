@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     CASDOOR_ORG_NAME: str = "built-in"
     CASDOOR_APP_NAME: str = "app-built-in"
 
-    # 现有门户用户信息反查接口（用于 iframe 打开时验证 portal_token，留空则启用本地Mock解析）
+    # 现有门户用户信息反查接口（单步Bearer模式，留空则不启用）
     PORTAL_USERINFO_URL: str = ""
+
+    # 门户统一身份认证体系接口配置（《门户-身份体系接口文档》两步换票及全量拉取，留空则启用本地Mock解析）
+    PORTAL_SSO_BASE_URL: str = ""
+    PORTAL_SSO_CLIENT_ID: str = "test-client"
+    PORTAL_AUTH_SALT: str = "4c4a1c7d52"
+    PORTAL_LOGIN_URL: str = "http://10.213.10.228:65/user/nlogin"
 
     # 安全密钥
     JUMP_TICKET_AES_KEY: str = "0123456789abcdef0123456789abcdef"

@@ -10,10 +10,17 @@ echo "=========================================================="
 echo ">>> [1/3] 构建 Python 3.12 镜像 (架构: ${PLATFORM}): ${IMAGE_NAME}:${IMAGE_TAG} ..."
 echo "=========================================================="
 
-# 默认针对 arm64 架构构建，兼容 buildx 与传统 docker build
+export DOCKER_BUILDKIT=1
+
+# 默认针对 arm64 架构构建，优先复用支持 BuildKit 缓存且兼容中文目录的本地 builder
 if docker buildx version >/dev/null 2>&1; then
-    docker buildx build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" --load . || \
-    docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+    if docker buildx inspect desktop-linux >/dev/null 2>&1; then
+        docker buildx build --builder desktop-linux --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" --load . || \
+        docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+    else
+        docker buildx build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" --load . || \
+        docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
+    fi
 else
     docker build --platform "${PLATFORM}" -t "${IMAGE_NAME}:${IMAGE_TAG}" .
 fi

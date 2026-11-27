@@ -41,8 +41,9 @@ sequenceDiagram
 | **门户用户静默同步** | `POST` | `/api/v1/sync/user` | 中台 TOKEN / 免密 | 门户注册/登录时双写建档，具有天然幂等性 |
 | **企业认证通过回调** | `POST` | `/api/v1/sync/enterprise-approved`| 中台 TOKEN / 免密 | 门户审核通过企业实名后升级租户与解锁子账号 |
 | **子账号审核通过同步** | `POST` | `/api/v1/sync/sub-account` | 中台 TOKEN / 免密 | 门户子账号申请通过后同步至权限中心与 Casdoor（幂等） |
+| **门户核销聚合查权** | `GET` / `POST` | `/api/v1/sync/user-perm-context` | 中台 TOKEN / 内网 | 门户沿用自身 Ticket 核销时，实时拉取角色、空间清单及模块白名单 |
 | **iframe 免密换票** | `GET` | `/api/v1/sso/exchange-iframe-session`| Portal Token | 供嵌入页面加载时置换内部 JWT 会话凭据 |
-| **子账号登录兜底** | `POST` | `/api/v1/sso/sub-login` | 账号密码 | 门户在本地查无账号时，交由本服务向 Casdoor 验密 |
+| **子账号登录兜底 (已废弃)** | `POST` | `/api/v1/sso/sub-login` | 账号密码 | [已废弃] 子账号已统一在门户侧申请建档与登录鉴权，无需透传验密 |
 | **OIDC 凭证换取/刷新**| `POST` | `/api/v1/sso/oauth/token` | Basic / Client Secret | 标准 OAuth 2.0 授权码换 Token 与 Refresh Token |
 
 ---
@@ -289,14 +290,12 @@ sequenceDiagram
 
 ---
 
-### 3.4 企业子账号登录门户兜底接口 (`POST /api/v1/sso/sub-login`)
+### 3.4 [已废弃通道] 企业子账号登录门户兜底接口 (`POST /api/v1/sso/sub-login`)
 
 #### 业务说明
-由于企业主账号创建的子账号直接在 Casdoor 和 `iam-service` 中建档，存量门户本地数据库暂无子账号记录。本接口专用于门户登录接口的“兜底验证通道”：
-1. 当用户在门户输入账号密码登录时，门户优先查本地库；
-2. 若本地无此账号，门户将凭证通过本接口转发给 `iam-service`；
-3. `iam-service` 请求 Casdoor 校验密码哈希；
-4. 校验通过后，返回子账号所属的租户 ID、企业名称、账号主子类型 (`account_type="SUB"`)、标准角色列表及空间 ID，门户据此建立登录态。
+> [!NOTE]
+> **重要变更说明**：当前架构已明确子账号全生命周期收敛于对外运营服务平台（门户系统）端。子账号由企业在门户申请并通过审核后，由门户调用 `POST /api/v1/sync/sub-account` 统一同步建档；门户本地原生具备子账号记录并自主完成登录鉴权。
+> 用户中心前端管理界面不开放独立新建子账号功能，因此**不存在**“门户查无账号转交用户中心兜底验密登录”的逻辑。本接口仅作历史测试兼容，新系统严禁对接。
 
 #### 请求参数
 **Path & Method**: `POST /api/v1/sso/sub-login`  
@@ -357,3 +356,18 @@ sequenceDiagram
   "scope": "openid profile email"
 }
 ```
+
+---
+
+### 3.6 门户核销聚合查询用户权限上下文 (`GET / POST /api/v1/sync/user-perm-context`)
+
+#### 业务说明
+专用于“沿用门户已有 Ticket（方案 4）”的场景：子平台回调门户核销 Ticket 时，门户在内部调用本接口传入 `portal_user_id`（可选传 `workspace_id` 与 `target_platform`），一次性获取租户、主子账号溯源、全部授权工作空间及对应角色/模块白名单，合并到门户原有核销响应体中一并返回给子平台。
+
+#### 请求参数（GET Query 或 POST Body）
+| 参数名 | 类型 | 必填 | 说明 |
+| :--- | :--- | :---: | :--- |
+| `portal_user_id` | `string` | 条件必选 | 门户系统用户 ID（与 `user_id` 二选一） |
+| `user_id` | `string` | 条件必选 | 用户中心用户 ID（与 `portal_user_id` 二选一） |
+| `workspace_id` | `string` | 否 | 目标工作空间 ID（不传则自动返回默认空间或首个授权空间） |
+| `target_platform` | `string` | 否 | 目标平台编码（传入则裁剪 `allowed_modules`，不传返回全量） |

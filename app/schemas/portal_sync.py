@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 
 
@@ -100,3 +100,43 @@ class QueryUserInfoResp(BaseModel):
     PROVINCE_CODE: str = Field("32", description="归属省份代码 (江苏32)")
     EPARCHY_CODE: str = Field("3205", description="归属地市代码 (苏州3205)")
     STATUS: str = Field("ACTIVE", description="用户状态")
+
+
+class PortalUserPermContextReq(BaseModel):
+    """门户核销 Ticket 时聚合查询用户全量权限上下文请求"""
+    portal_user_id: Optional[str] = Field(None, description="门户系统用户ID（与 user_id 二选一）")
+    user_id: Optional[str] = Field(None, description="用户中心全局用户ID（与 portal_user_id 二选一）")
+    workspace_id: Optional[str] = Field(None, description="指定工作空间ID（选填，不传取默认或首个授权空间）")
+    target_platform: Optional[str] = Field(None, description="目标平台编码（选填，传入则按平台过滤模块白名单）")
+
+
+class AuthorizedWorkspacePermItem(BaseModel):
+    """用户有权限的工作空间及其对应角色明细"""
+    workspace_id: str
+    workspace_name: str
+    is_default: bool = False
+    k8s_namespace: str = ""
+    role_code: str
+    allowed_modules: List[str] = Field(default_factory=list)
+
+
+class PortalUserPermContextResp(BaseModel):
+    """门户核销 Ticket 聚合返回的完整用户、租户、空间与角色权限上下文"""
+    user_id: str
+    portal_user_id: Optional[str] = None
+    username: str
+    master_user_id: str
+    account_type: str
+    tenant_id: str
+    tenant_name: str
+    tenant_type: str
+    cert_level: int
+    active_workspace_id: str
+    active_workspace_name: str
+    k8s_namespace: str = ""
+    role_code: str
+    roles: List[str]
+    allowed_modules: List[str]
+    has_platform_access: bool = True
+    authorized_workspaces: List[AuthorizedWorkspacePermItem] = Field(default_factory=list)
+    gateway_headers: Optional[Dict[str, str]] = None
